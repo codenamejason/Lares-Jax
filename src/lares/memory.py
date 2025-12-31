@@ -102,11 +102,22 @@ async def get_or_create_agent(client: Letta, config: Config) -> str:
     # Create a new agent with our memory blocks
     blocks = MemoryBlocks()
 
+    # Use appropriate embedding provider based on deployment type
+    # Self-hosted Letta: Use openai/text-embedding-3-small if OPENAI_API_KEY is configured
+    # Cloud Letta: Use openai/text-embedding-3-small
+    # Note: For self-hosted, OpenAI provider must be enabled in docker-compose.yml
+    if config.letta.is_self_hosted:
+        # Use OpenAI embedding for self-hosted (requires OPENAI_API_KEY in docker-compose)
+        embedding_provider = "openai/text-embedding-3-small"
+    else:
+        embedding_provider = "openai/text-embedding-3-small"
+    log.info("using_embedding_provider", provider=embedding_provider, self_hosted=config.letta.is_self_hosted)
+
     log.info("creating_new_agent", context_window_limit=LARES_CONTEXT_WINDOW_LIMIT)
     agent = client.agents.create(
         name="lares",
         model=LARES_MODEL,
-        embedding="openai/text-embedding-3-small",
+        embedding=embedding_provider,
         context_window_limit=LARES_CONTEXT_WINDOW_LIMIT,  # Set explicit context window limit
         memory_blocks=[
             {"label": "persona", "value": blocks.persona},

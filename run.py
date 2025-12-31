@@ -10,6 +10,14 @@ sys.path.insert(0, 'src')
 from dotenv import load_dotenv
 load_dotenv()
 
+# Configure SSL certificates using certifi (fixes macOS certificate issues)
+# This must happen BEFORE importing discord or aiohttp
+import certifi
+import ssl
+os.environ["SSL_CERT_FILE"] = certifi.where()
+# Configure default SSL context for urllib/aiohttp
+ssl._create_default_https_context = lambda: ssl.create_default_context(cafile=certifi.where())
+
 # Enable context monitoring BEFORE importing memory module
 # This must happen before any imports from lares.memory
 if os.getenv("LARES_CONTEXT_MONITORING", "false").lower() == "true":
@@ -23,6 +31,8 @@ if os.getenv("LARES_CONTEXT_MONITORING", "false").lower() == "true":
         traceback.print_exc()
 
 import asyncio
+
+import discord
 
 from lares.config import load_config
 from lares.discord_bot import create_bot
@@ -77,6 +87,24 @@ def main():
         log = get_logger("main")
         log.info("lares_shutdown", reason="keyboard_interrupt")
         print("\nLares shutting down gracefully...", flush=True)
+
+    except discord.errors.PrivilegedIntentsRequired as e:
+        log = get_logger("main")
+        log.error("discord_privileged_intents_required", error=str(e))
+        print("\n" + "=" * 70, flush=True, file=sys.stderr)
+        print("DISCORD PRIVILEGED INTENTS REQUIRED", flush=True, file=sys.stderr)
+        print("=" * 70, flush=True, file=sys.stderr)
+        print("\nLares requires the 'MESSAGE CONTENT INTENT' to be enabled.", flush=True, file=sys.stderr)
+        print("\nTo fix this:", flush=True, file=sys.stderr)
+        print("1. Go to https://discord.com/developers/applications/", flush=True, file=sys.stderr)
+        print("2. Select your bot application", flush=True, file=sys.stderr)
+        print("3. Navigate to the 'Bot' section in the left sidebar", flush=True, file=sys.stderr)
+        print("4. Scroll down to 'Privileged Gateway Intents'", flush=True, file=sys.stderr)
+        print("5. Enable 'MESSAGE CONTENT INTENT'", flush=True, file=sys.stderr)
+        print("6. Save changes", flush=True, file=sys.stderr)
+        print("\nNote: This is required for the bot to read message content.", flush=True, file=sys.stderr)
+        print("=" * 70 + "\n", flush=True, file=sys.stderr)
+        sys.exit(1)
 
     except Exception as e:
         log = get_logger("main")
