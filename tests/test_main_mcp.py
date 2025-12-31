@@ -15,7 +15,7 @@ class TestLaresCoreInit:
         core = LaresCore(config, letta_client, "agent-123", discord, "http://localhost:8765")
         assert core.config == config
         assert core.agent_id == "agent-123"
-        assert core.max_tool_iterations == 100  # From LARES_MAX_TOOL_ITERATIONS env
+        assert core.max_tool_iterations == 15  # From LARES_MAX_TOOL_ITERATIONS env
 
 
 class TestExecuteTool:
