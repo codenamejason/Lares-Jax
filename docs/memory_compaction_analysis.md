@@ -18,7 +18,7 @@ Based on Letta API documentation, we can configure:
 **Current Configuration in Lares:**
 ```python
 # No explicit context_window_limit set
-model = "anthropic/claude-opus-4-5-20251101"  # Supports 200k tokens
+model = "openai-proxy/openai/gpt-oss-20b"  # Supports 200k tokens
 # No compaction_settings specified
 ```
 

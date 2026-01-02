@@ -62,9 +62,31 @@ def create_letta_client(config: Config) -> Letta:
         return Letta(api_key=config.letta.api_key)
 
 
-LARES_MODEL = "anthropic/claude-opus-4-5-20251101"
+# Model configuration - reads from LARES_MODEL or OLLAMA_MODEL env vars
+# Format must be: provider/model-name (e.g., openai-proxy/openai/gpt-oss-20b, openai/gpt-4, etc.)
+LARES_MODEL = os.getenv("LARES_MODEL", os.getenv("OLLAMA_MODEL", "openai-proxy/openai/gpt-oss-20b"))
 # Context window limit (default: 50k tokens)
 LARES_CONTEXT_WINDOW_LIMIT = int(os.getenv("LARES_CONTEXT_WINDOW_LIMIT", "50000"))
+
+
+def _normalize_model_for_creation(model: str) -> str:
+    """
+    Normalize model name for Letta agent creation.
+    
+    Letta has a validation bug: when OPENAI_API_BASE is set, it internally registers
+    models with 'openai-proxy/' prefix, but rejects this prefix during validation.
+    
+    This function strips the 'openai-proxy/' prefix to work around the validation issue.
+    
+    Examples:
+        openai-proxy/openai/gpt-oss-20b -> openai/gpt-oss-20b
+        openai/gpt-4 -> openai/gpt-4
+    """
+    if model.startswith("openai-proxy/"):
+        normalized = model.replace("openai-proxy/", "", 1)
+        log.info("normalized_model_for_creation", original=model, normalized=normalized)
+        return normalized
+    return model
 
 
 async def get_or_create_agent(client: Letta, config: Config) -> str:
@@ -73,9 +95,19 @@ async def get_or_create_agent(client: Letta, config: Config) -> str:
     if config.agent_id:
         try:
             agent = client.agents.retrieve(config.agent_id)
-            log.info("found_existing_agent", agent_id=agent.id, name=agent.name)
+            log.info("found_existing_agent", agent_id=agent.id, name=agent.name, model=agent.model)
 
-            # Update model if it changed
+            # Note: Skip ALL updates for openai-proxy models due to Letta validation bug
+            # Even updating context_window_limit triggers model validation which fails for openai-proxy models
+            if agent.model.startswith("openai-proxy/"):
+                log.info(
+                    "skipping_agent_updates",
+                    reason="openai-proxy models cannot be updated due to Letta validation bug",
+                    current_model=agent.model,
+                )
+                return agent.id
+
+            # Only update if NOT an openai-proxy model
             if agent.model != LARES_MODEL:
                 log.info(
                     "updating_agent_model",
@@ -97,7 +129,17 @@ async def get_or_create_agent(client: Letta, config: Config) -> str:
 
             return agent.id
         except Exception as e:
-            log.warning("stored_agent_not_found", agent_id=config.agent_id, error=str(e))
+            error_str = str(e)
+            # Check if this is a model format validation error
+            if "model handle should be in the format provider/model-name" in error_str:
+                log.warning(
+                    "invalid_model_format_detected",
+                    agent_id=config.agent_id,
+                    error="Agent has invalid model format, will create new agent"
+                )
+                print("\n⚠️  Existing agent has invalid model format. Creating new agent...")
+            else:
+                log.warning("stored_agent_not_found", agent_id=config.agent_id, error=str(e))
 
     # Create a new agent with our memory blocks
     blocks = MemoryBlocks()
@@ -113,19 +155,40 @@ async def get_or_create_agent(client: Letta, config: Config) -> str:
         embedding_provider = "openai/text-embedding-3-small"
     log.info("using_embedding_provider", provider=embedding_provider, self_hosted=config.letta.is_self_hosted)
 
-    log.info("creating_new_agent", context_window_limit=LARES_CONTEXT_WINDOW_LIMIT)
-    agent = client.agents.create(
-        name="lares",
-        model=LARES_MODEL,
-        embedding=embedding_provider,
-        context_window_limit=LARES_CONTEXT_WINDOW_LIMIT,  # Set explicit context window limit
-        memory_blocks=[
-            {"label": "persona", "value": blocks.persona},
-            {"label": "human", "value": blocks.human},
-            {"label": "state", "value": blocks.state},
-            {"label": "ideas", "value": blocks.ideas},
-        ],
-    )
+    # Normalize model name to work around Letta validation bug
+    creation_model = _normalize_model_for_creation(LARES_MODEL)
+    
+    log.info("creating_new_agent", 
+             model=creation_model,
+             context_window_limit=LARES_CONTEXT_WINDOW_LIMIT)
+    
+    try:
+        agent = client.agents.create(
+            name="lares",
+            model=creation_model,  # Use normalized model name
+            embedding=embedding_provider,
+            context_window_limit=LARES_CONTEXT_WINDOW_LIMIT,  # Set explicit context window limit
+            memory_blocks=[
+                {"label": "persona", "value": blocks.persona},
+                {"label": "human", "value": blocks.human},
+                {"label": "state", "value": blocks.state},
+                {"label": "ideas", "value": blocks.ideas},
+            ],
+        )
+    except Exception as e:
+        error_str = str(e)
+        if "Provider" in error_str and "is not supported" in error_str:
+            log.error("agent_creation_failed_invalid_provider", 
+                     model=creation_model,
+                     original_model=LARES_MODEL,
+                     error=error_str)
+            print(f"\n❌ Failed to create agent with model '{creation_model}'")
+            print(f"Error: {error_str}")
+            print(f"\n💡 Solution: Create an agent manually in the Letta UI (http://localhost:8283)")
+            print(f"   then add the agent ID to your .env file as LARES_AGENT_ID=<agent-id>\n")
+            raise
+        else:
+            raise
 
     log.info("created_new_agent", agent_id=agent.id)
     print("\n*** New agent created! Add this to your .env file: ***")

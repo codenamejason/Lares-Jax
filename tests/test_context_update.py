@@ -39,7 +39,7 @@ def test_context_window_update():
     mock_agent = Mock()
     mock_agent.id = "test-agent-123"
     mock_agent.name = "lares"
-    mock_agent.model = "anthropic/claude-opus-4-5-20251101"
+    mock_agent.model = "openai-proxy/openai/gpt-oss-20b"
     # No context_window_limit attribute
 
     mock_client.agents.retrieve.return_value = mock_agent
@@ -61,7 +61,7 @@ def test_context_window_update():
     mock_agent2 = Mock()
     mock_agent2.id = "test-agent-123"
     mock_agent2.name = "lares"
-    mock_agent2.model = "anthropic/claude-opus-4-5-20251101"
+    mock_agent2.model = "openai-proxy/openai/gpt-oss-20b"
     mock_agent2.context_window_limit = 25000  # Old value
 
     mock_client.agents.retrieve.return_value = mock_agent2
@@ -80,7 +80,7 @@ def test_context_window_update():
     mock_agent3 = Mock()
     mock_agent3.id = "test-agent-123"
     mock_agent3.name = "lares"
-    mock_agent3.model = "anthropic/claude-opus-4-5-20251101"
+    mock_agent3.model = "openai-proxy/openai/gpt-oss-20b"
     mock_agent3.context_window_limit = 75000  # Same as env var
 
     mock_client.agents.retrieve.return_value = mock_agent3
