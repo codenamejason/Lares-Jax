@@ -13,12 +13,12 @@ Before=lares.service
 
 [Service]
 Type=simple
-User=daniele
-WorkingDirectory=/home/daniele/workspace/lares
-Environment=PATH=/home/daniele/workspace/lares/.venv/bin:/usr/bin:/bin
+User=jason
+WorkingDirectory=/Users/jaxcoder/strix-jax/Lares-Jax
+Environment=PATH=/Users/jaxcoder/strix-jax/Lares-Jax/.venv/bin:/usr/bin:/bin
 # Load Discord credentials from .env
-EnvironmentFile=/home/daniele/workspace/lares/.env
-ExecStart=/home/daniele/workspace/lares/.venv/bin/python -m lares.mcp_server
+EnvironmentFile=/Users/jaxcoder/strix-jax/Lares-Jax/.env
+ExecStart=/Users/jaxcoder/strix-jax/Lares-Jax/.venv/bin/python -m lares.mcp_server
 Restart=always
 RestartSec=5
 StandardOutput=journal

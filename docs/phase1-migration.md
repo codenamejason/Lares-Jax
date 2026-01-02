@@ -57,7 +57,7 @@ Just need to add `EnvironmentFile` to the service to load Discord credentials.
 sudo systemctl stop lares lares-mcp
 
 # Start MCP with Discord (test)
-cd /home/daniele/workspace/lares
+cd /Users/jaxcoder/strix-jax/Lares-Jax
 source .env
 python -m lares.mcp_server
 

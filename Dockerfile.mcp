@@ -1,0 +1,25 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Install system dependencies if needed
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy dependency files (README.md needed for pyproject.toml)
+COPY pyproject.toml README.md ./
+
+# Install Python dependencies (including mcp, aiohttp, starlette, uvicorn)
+RUN pip install --no-cache-dir -e .
+
+# Copy source code
+COPY src/ src/
+
+# Set Python path
+ENV PYTHONPATH=/app/src:/app
+
+# Expose MCP server port
+EXPOSE 8765
+
+# Run MCP server
+CMD ["python", "-m", "lares.mcp_server"]

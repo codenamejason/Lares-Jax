@@ -239,12 +239,12 @@ class LaresCore:
             return  # Handled as approval
 
         # Forward non-approval reactions to Letta as feedback
-        # This lets me know when Daniele reacts to my messages (👍, ❤️, etc.)
+        # This lets me know when Jason reacts to my messages (👍, ❤️, etc.)
         time_context = get_time_context(self.config.user.timezone)
         reaction_prompt = f"""[REACTION FEEDBACK]
 {time_context}
 
-Daniele reacted with {event.emoji} to a message.
+Jason reacted with {event.emoji} to a message.
 
 This is lightweight feedback - no response needed unless you want to acknowledge it.
 React with 👀 if you noticed, or stay silent."""
@@ -335,7 +335,7 @@ Take a moment to:
 1. Reflect on recent interactions and update your memory if needed
 2. Check your ideas/roadmap and consider what you could work on
 3. Use your tools to make progress on a task (git operations, code changes, etc.)
-4. Optionally send a message to Daniele if you have something to share
+4. Optionally send a message to Jason if you have something to share
 
 What would you like to do?"""
 
@@ -396,6 +396,11 @@ async def run() -> None:
     letta_client = create_letta_client(config)
     agent_id = await get_or_create_agent(letta_client, config)
 
+    # Register tools with Letta (with requires_approval=True for Phase 1)
+    from lares.tool_registry import register_tools_with_letta
+    registered_tools = register_tools_with_letta(letta_client, agent_id)
+    log.info("tools_registered_with_letta", count=len(registered_tools), tools=registered_tools)
+
     # Create Discord client for sending messages
     discord = DiscordClient(mcp_url)
 
@@ -412,7 +417,7 @@ async def run() -> None:
 
     # Try to send startup message (may fail if Discord isn't ready yet)
     for attempt in range(5):
-        result = await discord.send_message("🦉 Lares online (MCP mode)")
+        result = await discord.send_message("🦉 Jax is online! 🦉")
         if result.get("status") == "ok":
             break
         log.warning("startup_message_failed", attempt=attempt + 1, result=result)

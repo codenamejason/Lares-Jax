@@ -8,7 +8,72 @@ services:
     environment:
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://ollama:11434}
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-gpt-oss:latest}
     restart: unless-stopped
+    networks:
+      - lares-network
+
+  mcp-server:
+    build:
+      context: .
+      dockerfile: Dockerfile.mcp
+    ports:
+      - "8765:8765"
+    environment:
+      - DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN}
+      - DISCORD_CHANNEL_ID=${DISCORD_CHANNEL_ID}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - LETTA_BASE_URL=http://letta:8283
+      - LARES_PROJECT_PATH=${LARES_PROJECT_PATH:-/app}
+      - OBSIDIAN_VAULT_PATH=${OBSIDIAN_VAULT_PATH}
+      - LARES_APPROVAL_DB=${LARES_APPROVAL_DB:-/app/data/approvals.db}
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://ollama:11434}
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-gpt-oss:latest}
+    depends_on:
+      letta:
+        condition: service_started
+    restart: unless-stopped
+    networks:
+      - lares-network
+    volumes:
+      - ./data:/app/data
+      - "/Users/jaxcoder/Desktop/Obsidian Jax Labs:/obsidian"
+
+  lares-bot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      - DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN}
+      - DISCORD_CHANNEL_ID=${DISCORD_CHANNEL_ID}
+      - LETTA_BASE_URL=http://letta:8283
+      - LARES_MCP_URL=http://mcp-server:8765
+      - LARES_AGENT_ID=${LARES_AGENT_ID}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - USER_TIMEZONE=${USER_TIMEZONE:-America/Los_Angeles}
+      - LARES_MAX_TOOL_ITERATIONS=${LARES_MAX_TOOL_ITERATIONS:-10}
+      - LARES_CONTEXT_WINDOW_LIMIT=${LARES_CONTEXT_WINDOW_LIMIT:-50000}
+      - LARES_CONTEXT_MONITORING=${LARES_CONTEXT_MONITORING:-false}
+      - OBSIDIAN_VAULT_PATH=${OBSIDIAN_VAULT_PATH}
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://ollama:11434}
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-gpt-oss:latest}
+    depends_on:
+      letta:
+        condition: service_started
+      mcp-server:
+        condition: service_started
+    restart: unless-stopped
+    networks:
+      - lares-network
+    volumes:
+      - "/Users/jaxcoder/Desktop/Obsidian Jax Labs:/obsidian"
 
 volumes:
   letta-data:
+
+networks:
+  lares-network:
+    driver: bridge

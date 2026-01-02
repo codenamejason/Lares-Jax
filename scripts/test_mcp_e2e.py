@@ -25,7 +25,7 @@ from pathlib import Path
 import uuid
 
 MCP_BASE_URL = "http://127.0.0.1:8765"
-APPROVAL_DB = Path("/home/daniele/workspace/lares/data/approvals.db")
+APPROVAL_DB = Path("/Users/jaxcoder/strix-jax/Lares-Jax/data/approvals.db")
 
 
 def api_get(endpoint: str) -> dict:
@@ -90,7 +90,7 @@ def submit_test_approval_directly() -> str:
             (
                 approval_id, 
                 "run_shell_command", 
-                json.dumps({"command": "echo 'Hello from MCP test!'", "working_dir": "/home/daniele/workspace/lares"}),
+                json.dumps({"command": "echo 'Hello from MCP test!'", "working_dir": "/Users/jaxcoder/strix-jax/Lares-Jax"}),
                 now
             ),
         )

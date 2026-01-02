@@ -72,9 +72,54 @@ cp .env.example .env
 
 ### Running
 
-#### Development Mode
+#### Docker Compose (Recommended)
 
-For testing and development:
+Run all services in containers for consistent environments:
+
+```bash
+# Create .env file with required variables (see Configuration section)
+cp .env.example .env
+# Edit .env with your credentials
+
+# Build and start all services
+docker compose up --build
+
+# Or run in detached mode
+docker compose up -d --build
+
+# View logs
+docker compose logs -f
+
+# View logs for specific service
+docker compose logs -f lares-bot
+docker compose logs -f mcp-server
+docker compose logs -f letta
+
+# Stop all services
+docker compose down
+
+# Rebuild after code changes
+docker compose build
+docker compose up
+```
+
+**Container Networking:**
+- Services communicate using service names: `letta`, `mcp-server`, `lares-bot`
+- Set in `.env`:
+  - `LETTA_BASE_URL=http://letta:8283` (for containers)
+  - `LARES_MCP_URL=http://mcp-server:8765` (for containers)
+- Ports exposed:
+  - Letta: `8283` (for external access if needed)
+  - MCP Server: `8765` (for external access if needed)
+
+**Services:**
+- `letta`: Letta memory service
+- `mcp-server`: MCP server with Discord integration
+- `lares-bot`: Main Discord bot
+
+#### Development Mode (Local)
+
+For testing and development locally:
 
 ```bash
 # Activate virtual environment
@@ -136,6 +181,8 @@ Then set in your `.env`:
 ```
 LETTA_BASE_URL=http://localhost:8283
 ```
+
+**Note:** When using Docker Compose, Letta is automatically included and configured. Use `LETTA_BASE_URL=http://letta:8283` for container networking.
 
 ## Approval Workflows
 

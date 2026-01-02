@@ -5,12 +5,12 @@ Wants=docker.service
 
 [Service]
 Type=simple
-User=daniele
-WorkingDirectory=/home/daniele/workspace/lares
-Environment=PATH=/home/daniele/workspace/lares/.venv/bin:/usr/bin:/bin
+User=jason
+WorkingDirectory=/Users/jaxcoder/strix-jax/Lares-Jax
+Environment=PATH=/Users/jaxcoder/strix-jax/Lares-Jax/.venv/bin:/usr/bin:/bin
 ExecStartPre=/usr/bin/docker start letta
 ExecStartPre=/bin/sleep 10
-ExecStart=/home/daniele/workspace/lares/.venv/bin/python /home/daniele/workspace/lares/run.py
+ExecStart=/Users/jaxcoder/strix-jax/Lares-Jax/.venv/bin/python /Users/jaxcoder/strix-jax/Lares-Jax/run.py
 Restart=always
 RestartSec=10
 StandardOutput=journal

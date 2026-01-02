@@ -4,11 +4,11 @@ After=network.target
 
 [Service]
 Type=simple
-User=daniele
-WorkingDirectory=/home/daniele/workspace/lares
-EnvironmentFile=/home/daniele/workspace/lares/.env
-Environment=PATH=/home/daniele/workspace/lares/.venv/bin:/usr/bin:/bin
-ExecStart=/home/daniele/workspace/lares/.venv/bin/python -m lares.mcp_server
+User=jason
+WorkingDirectory=/Users/jaxcoder/strix-jax/Lares-Jax
+EnvironmentFile=/Users/jaxcoder/strix-jax/Lares-Jax/.env
+Environment=PATH=/Users/jaxcoder/strix-jax/Lares-Jax/.venv/bin:/usr/bin:/bin
+ExecStart=/Users/jaxcoder/strix-jax/Lares-Jax/.venv/bin/python -m lares.mcp_server
 Restart=always
 RestartSec=5
 StandardOutput=journal

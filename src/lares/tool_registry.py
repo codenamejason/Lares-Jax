@@ -1,6 +1,7 @@
 """Registry for Letta tools with client-side execution."""
 
 import asyncio
+import traceback
 from typing import Any
 
 import aiohttp
@@ -9,6 +10,7 @@ import structlog
 from letta_client import Letta
 
 from lares.config import ToolsConfig
+from lares.memory import PendingToolCall
 from lares.obsidian import read_note as obsidian_read_note
 from lares.obsidian import search_notes as obsidian_search_notes
 from lares.tools import (
@@ -200,62 +202,62 @@ class ToolExecutor:
         """Execute a tool and return the result as a string for Letta."""
         try:
             if tool_name == "run_command":
-                return await self._run_command(
+                result = await self._run_command(
                     arguments.get("command", ""),
                     arguments.get("working_dir"),
                 )
             elif tool_name == "read_file":
-                return self._read_file(arguments.get("path", ""))
+                result = self._read_file(arguments.get("path", ""))
             elif tool_name == "write_file":
-                return self._write_file(
+                result = self._write_file(
                     arguments.get("path", ""),
                     arguments.get("content", ""),
                 )
             elif tool_name == "create_tool":
-                return self._create_tool(arguments.get("source_code", ""))
+                result = self._create_tool(arguments.get("source_code", ""))
             elif tool_name == "schedule_job":
-                return self._schedule_job(
+                result = self._schedule_job(
                     arguments.get("job_id", ""),
                     arguments.get("prompt", ""),
                     arguments.get("schedule", ""),
                     arguments.get("description", ""),
                 )
             elif tool_name == "remove_job":
-                return self._remove_job(arguments.get("job_id", ""))
+                result = self._remove_job(arguments.get("job_id", ""))
             elif tool_name == "list_jobs":
-                return self._list_jobs()
+                result = self._list_jobs()
             elif tool_name == "read_rss_feed":
-                return self._read_rss_feed(
+                result = self._read_rss_feed(
                     arguments.get("url", ""),
                     arguments.get("max_entries", 5),
                 )
             elif tool_name == "read_bluesky_user":
-                return self._read_bluesky_user(
+                result = self._read_bluesky_user(
                     arguments.get("handle", ""),
                     arguments.get("limit", 5),
                 )
             elif tool_name == "search_bluesky":
-                return self._search_bluesky(
+                result = self._search_bluesky(
                     arguments.get("query", ""),
                     arguments.get("limit", 10),
                 )
             elif tool_name == "post_to_bluesky":
-                return await self._post_to_bluesky(
+                result = await self._post_to_bluesky(
                     arguments.get("text", ""),
                 )
             elif tool_name == "discord_send_message":
-                return await self._discord_send_message(
+                result = await self._discord_send_message(
                     arguments.get("content", ""),
                     arguments.get("reply", False),
                 )
             elif tool_name == "discord_react":
-                return await self._discord_react(arguments.get("emoji", ""))
+                result = await self._discord_react(arguments.get("emoji", ""))
             elif tool_name == "restart_lares":
-                return await self._restart_lares()
+                result = await self._restart_lares()
             elif tool_name == "restart_mcp":
-                return await self._restart_mcp()
+                result = await self._restart_mcp()
             elif tool_name == "search_obsidian_notes":
-                return self._search_obsidian_notes(
+                result = self._search_obsidian_notes(
                     arguments.get("query", ""),
                     arguments.get("max_results", 10),
                 )
@@ -265,12 +267,57 @@ class ToolExecutor:
                 result = self._read_obsidian_note(path)
                 log.info("read_obsidian_note_result", path=path, result_len=len(result),
                     result_preview=result[:100] if result else None)
-                return result
             else:
-                return f"Unknown tool: {tool_name}"
+                result = f"Unknown tool: {tool_name}"
+            
+            # Log if tool returned an error string (not an exception)
+            if isinstance(result, str) and result.startswith("Error"):
+                log.warning(
+                    "tool_returned_error",
+                    tool=tool_name,
+                    error_string=result,
+                    arguments=arguments
+                )
+            
+            return result
         except Exception as e:
-            log.error("tool_execution_error", tool=tool_name, error=str(e))
-            return f"Error executing {tool_name}: {e}"
+            error_msg = str(e) if str(e) else f"{type(e).__name__} (no message)"
+            error_traceback = traceback.format_exc()
+            log.error(
+                "tool_execution_error",
+                tool=tool_name,
+                error=error_msg,
+                error_type=type(e).__name__,
+                traceback=error_traceback
+            )
+            return f"Error executing {tool_name}: {error_msg}"
+
+    async def execute_tool(self, tool_call: PendingToolCall) -> str:
+        """Execute a tool from a PendingToolCall object."""
+        try:
+            # Parse arguments if they're a string
+            arguments = tool_call.arguments
+            if isinstance(arguments, str):
+                try:
+                    import json
+                    arguments = json.loads(arguments)
+                except (json.JSONDecodeError, TypeError):
+                    arguments = {}
+            elif not isinstance(arguments, dict):
+                arguments = {}
+            
+            return await self.execute(tool_call.name, arguments)
+        except Exception as e:
+            error_msg = str(e) if str(e) else f"{type(e).__name__} (no message)"
+            error_traceback = traceback.format_exc()
+            log.error(
+                "tool_execution_error",
+                tool=tool_call.name,
+                error=error_msg,
+                error_type=type(e).__name__,
+                traceback=error_traceback
+            )
+            return f"Error executing {tool_call.name}: {error_msg}"
 
     async def _run_command(self, command: str, working_dir: str | None) -> str:
         """Execute a command, requesting approval if needed."""
@@ -328,8 +375,8 @@ class ToolExecutor:
                     return output
                 else:
                     return (
-                        f"Command denied by Daniele: {command}\n\n"
-                        "(Daniele saw this request and chose to deny it)"
+                        f"Command denied by Ja: {command}\n\n"
+                        "(Ja saw this request and chose to deny it)"
                     )
 
             except TimeoutError:
@@ -339,7 +386,7 @@ class ToolExecutor:
                 )
                 return (
                     f"Approval request timed out after 5 minutes for command: {command}\n\n"
-                    "(Daniele has been notified of the timeout)"
+                    "(Ja has been notified of the timeout)"
                 )
 
     def _read_file(self, path: str) -> str:
@@ -448,11 +495,33 @@ class ToolExecutor:
 
     async def _discord_send_message(self, content: str, reply: bool) -> str:
         """Send a message to Discord."""
-        return await send_message(content, reply=reply)
+        # Check if Discord context is available
+        from lares.tools.discord import _discord_channel
+        if _discord_channel is None:
+            log.warning(
+                "discord_context_missing",
+                tool="discord_send_message",
+                message="Discord channel context not set"
+            )
+        result = await send_message(content, reply=reply)
+        if result.startswith("Error"):
+            log.warning("discord_send_message_failed", error=result, content_preview=content[:50])
+        return result
 
     async def _discord_react(self, emoji: str) -> str:
         """React to the current message with an emoji."""
-        return await react(emoji)
+        # Check if Discord context is available
+        from lares.tools.discord import _current_message
+        if _current_message is None:
+            log.warning(
+                "discord_context_missing",
+                tool="discord_react",
+                message="Discord message context not set"
+            )
+        result = await react(emoji)
+        if result.startswith("Error"):
+            log.warning("discord_react_failed", error=result, emoji=emoji)
+        return result
 
     async def _restart_lares(self) -> str:
         """Restart the Lares service."""
@@ -464,15 +533,25 @@ class ToolExecutor:
 
     def _search_obsidian_notes(self, query: str, max_results: int) -> str:
         """Search notes in the Obsidian vault."""
-        return obsidian_search_notes(query, max_results=max_results)
+        try:
+            return obsidian_search_notes(query, max_results=max_results)
+        except Exception as e:
+            error_msg = str(e) if str(e) else f"{type(e).__name__} (no message)"
+            log.error("obsidian_search_error", query=query, error=error_msg, error_type=type(e).__name__)
+            return f"Error searching Obsidian notes: {error_msg}"
 
     def _read_obsidian_note(self, path: str) -> str:
         """Read a specific note from the Obsidian vault."""
         log.info("_read_obsidian_note_wrapper", path=path)
-        result = obsidian_read_note(path)
-        log.info("_obsidian_read_result", path=path, result_len=len(result) if result else 0,
-                result_preview=result[:100] if result else None)
-        return result
+        try:
+            result = obsidian_read_note(path)
+            log.info("_obsidian_read_result", path=path, result_len=len(result) if result else 0,
+                    result_preview=result[:100] if result else None)
+            return result
+        except Exception as e:
+            error_msg = str(e) if str(e) else f"{type(e).__name__} (no message)"
+            log.error("obsidian_read_error", path=path, error=error_msg, error_type=type(e).__name__)
+            return f"Error reading Obsidian note: {error_msg}"
 
 
 # Tool definitions for Letta registration
@@ -668,7 +747,7 @@ def discord_send_message(content: str, reply: bool = False) -> str:
     """
     Send a message to the Discord channel.
 
-    Use this to communicate with Daniele. You can send updates, ask questions,
+    Use this to communicate with Ja. You can send updates, ask questions,
     share findings, or just chat.
 
     Args:
@@ -758,40 +837,23 @@ def register_tools_with_letta(client: Letta, agent_id: str) -> list[str]:
     """
     Register client-side tools with a Letta agent.
 
-    Tools are created with defaultRequiresApproval based on whether they
-    need user approval or can be auto-executed.
+    For Phase 1 MCP architecture, ALL tools must be registered with
+    requires_approval=True so that Letta returns them as pending_tool_calls
+    instead of trying to execute them in its sandbox.
 
     Returns list of registered tool names.
     """
     log.info("registering_tools", agent_id=agent_id)
-
-    # Whitelist of tools that DON'T need user approval (auto-executed)
-    tools_not_requiring_approval = {
-        "run_command",  # Has internal allowlist + Discord approval workflow
-        "post_to_bluesky",  # Has Discord approval workflow
-        "discord_send_message",
-        "discord_react",
-        "read_file",
-        "write_file",
-        "schedule_job",
-        "remove_job",
-        "list_jobs",
-        "read_rss_feed",
-        "read_bluesky_user",
-        "search_bluesky",
-        "search_obsidian_notes",
-        "read_obsidian_note",
-        "restart_lares",
-        "restart_mcp",
-    }
 
     registered: list[str] = []
     tool_ids: list[str] = []
 
     for name, source_code in TOOL_SOURCES.items():
         try:
-            # Tools NOT in whitelist require approval (safer default)
-            needs_approval = name not in tools_not_requiring_approval
+            # Phase 1 MCP: ALL tools require approval (returns as pending_tool_calls)
+            # This prevents Letta from trying to execute them in its sandbox
+            # where they would fail with "Client-side tool" exception
+            needs_approval = True
 
             tool = client.tools.upsert(
                 source_code=source_code,

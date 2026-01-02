@@ -123,9 +123,9 @@ def create_bot(config: Config, client: Letta, agent_id: str) -> commands.Bot:
     async def handle_response(response: MessageResponse, trigger_message: discord.Message) -> None:
         """Handle Letta response, executing tools and sending Discord actions."""
         # Execute pending tools first
-        if response.pending_tools:
-            log.info("executing_tools", count=len(response.pending_tools))
-            for tool_call in response.pending_tools:
+        if response.pending_tool_calls:
+            log.info("executing_tools", count=len(response.pending_tool_calls))
+            for tool_call in response.pending_tool_calls:
                 try:
                     result = await tool_executor.execute_tool(tool_call)
                     log.info("tool_executed", tool=tool_call.name, result_preview=str(result)[:50])
@@ -138,8 +138,8 @@ def create_bot(config: Config, client: Letta, agent_id: str) -> commands.Bot:
                     )
 
                     # If tool execution triggered more tools, handle them
-                    if tool_response.pending_tools:
-                        for followup_tool in tool_response.pending_tools:
+                    if tool_response.pending_tool_calls:
+                        for followup_tool in tool_response.pending_tool_calls:
                             await tool_executor.execute_tool(followup_tool)
 
                 except Exception as e:
@@ -216,8 +216,8 @@ Be proactive and useful. Use your tools to gather information, check on things, 
 
             # Process response (tools and actions)
             # For perch time, we'll handle actions directly since there's no triggering message
-            if response.pending_tools:
-                for tool_call in response.pending_tools:
+            if response.pending_tool_calls:
+                for tool_call in response.pending_tool_calls:
                     try:
                         result = await tool_executor.execute_tool(tool_call)
                         log.info("perch_tool_executed", tool=tool_call.name)
@@ -295,7 +295,7 @@ Be proactive and useful. Use your tools to gather information, check on things, 
         # Send startup message
         if channel:
             try:
-                await channel.send("🦉 Lares online")
+                await channel.send("🦉 Jax is online")
             except Exception as e:
                 log.error("startup_message_failed", error=str(e))
 

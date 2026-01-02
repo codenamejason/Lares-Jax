@@ -47,13 +47,13 @@ mcp = FastMCP(
 )
 
 # Configuration
-LARES_PROJECT = Path(os.getenv("LARES_PROJECT_PATH", "/home/daniele/workspace/lares"))
+LARES_PROJECT = Path(os.getenv("LARES_PROJECT_PATH", "/Users/jaxcoder/strix-jax/Lares-Jax"))
 OBSIDIAN_VAULT = Path(
-    os.getenv("OBSIDIAN_VAULT_PATH", "/home/daniele/workspace/gitlab/daniele/appunti")
+    os.getenv("OBSIDIAN_VAULT_PATH", "/Users/jaxcoder/Desktop/Obsidian Jax Labs")
 )
 ALLOWED_DIRECTORIES = [LARES_PROJECT, OBSIDIAN_VAULT]
 APPROVAL_DB = Path(
-    os.getenv("LARES_APPROVAL_DB", "/home/daniele/workspace/lares/data/approvals.db")
+    os.getenv("LARES_APPROVAL_DB", "/Users/jaxcoder/strix-jax/Lares-Jax/data/approvals.db")
 )
 
 BSKY_PUBLIC_API = "https://public.api.bsky.app/xrpc"

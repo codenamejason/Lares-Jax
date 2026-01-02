@@ -58,3 +58,4 @@ lares_export.af
 
 # Agent backups (may contain sensitive memory)
 backups/
+.DS_Store

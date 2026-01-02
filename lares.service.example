@@ -6,7 +6,7 @@ Wants=docker.service
 [Service]
 Type=simple
 # Replace YOUR_USER with your username
-User=YOUR_USER
+User=jason
 # Replace with your lares installation path
 WorkingDirectory=/path/to/lares
 Environment=PATH=/path/to/lares/.venv/bin:/usr/bin:/bin
