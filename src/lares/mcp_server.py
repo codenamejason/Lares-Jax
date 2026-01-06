@@ -47,7 +47,7 @@ mcp = FastMCP(
 )
 
 # Configuration
-LARES_PROJECT = Path(os.getenv("LARES_PROJECT_PATH", "/Users/jaxcoder/strix-jax/Lares-Jax"))
+LARES_PROJECT = Path(os.getenv("LARES_PROJECT_PATH", "/Users/jaxcoder/strix-jax/Lares-Jax:app"))
 OBSIDIAN_VAULT = Path(
     os.getenv("OBSIDIAN_VAULT_PATH", "/Users/jaxcoder/Desktop/Obsidian Jax Labs")
 )
@@ -901,6 +901,151 @@ def read_obsidian_note(path: str) -> str:
         return f"📄 {path}\n{'=' * 40}\n\n{content}"
     except Exception as e:
         return f"Error reading note: {e}"
+
+
+@mcp.tool()
+def write_obsidian_note(path: str, content: str, overwrite: bool = False) -> str:
+    """Create or write a note in the Obsidian vault."""
+    # Add .md extension if not present
+    if not path.endswith(".md"):
+        path = f"{path}.md"
+    
+    note_path = OBSIDIAN_VAULT / path
+
+    try:
+        note_path.resolve().relative_to(OBSIDIAN_VAULT.resolve())
+    except ValueError:
+        return "Error: Path must be within the Obsidian vault"
+
+    # Check if note exists and we're not overwriting
+    if note_path.exists() and not overwrite:
+        return f"Note already exists: {path}. Use overwrite=True to replace."
+
+    try:
+        # Create parent directories if needed
+        note_path.parent.mkdir(parents=True, exist_ok=True)
+        note_path.write_text(content, encoding="utf-8")
+        return f"✅ Successfully wrote note: {path}"
+    except Exception as e:
+        return f"Error writing note: {e}"
+
+
+@mcp.tool()
+def append_to_obsidian_note(path: str, content: str, separator: str = "\n\n") -> str:
+    """Append content to an existing note, or create it if it doesn't exist."""
+    # Add .md extension if not present
+    if not path.endswith(".md"):
+        path = f"{path}.md"
+    
+    note_path = OBSIDIAN_VAULT / path
+
+    try:
+        note_path.resolve().relative_to(OBSIDIAN_VAULT.resolve())
+    except ValueError:
+        return "Error: Path must be within the Obsidian vault"
+
+    try:
+        if note_path.exists():
+            existing = note_path.read_text(encoding="utf-8")
+            new_content = existing.rstrip() + separator + content
+        else:
+            note_path.parent.mkdir(parents=True, exist_ok=True)
+            new_content = content
+
+        note_path.write_text(new_content, encoding="utf-8")
+        return f"✅ Successfully appended to note: {path}"
+    except Exception as e:
+        return f"Error appending to note: {e}"
+
+
+@mcp.tool()
+def list_obsidian_notes(directory: str = "", include_subdirs: bool = False) -> str:
+    """List notes in a directory of the Obsidian vault."""
+    target = OBSIDIAN_VAULT / directory if directory else OBSIDIAN_VAULT
+
+    if not target.exists():
+        return f"Error: Directory not found: {directory or '(vault root)'}"
+
+    try:
+        notes = []
+        folders = []
+
+        if include_subdirs:
+            for md_file in target.rglob("*.md"):
+                if not any(part.startswith(".") for part in md_file.parts):
+                    notes.append(str(md_file.relative_to(OBSIDIAN_VAULT)))
+        else:
+            for item in sorted(target.iterdir()):
+                if item.name.startswith("."):
+                    continue
+                if item.is_dir():
+                    folders.append(f"📁 {item.name}/")
+                elif item.suffix == ".md":
+                    notes.append(f"📝 {item.name}")
+
+        result_parts = []
+        if directory:
+            result_parts.append(f"Contents of {directory}/:\n")
+        else:
+            result_parts.append("Vault contents:\n")
+
+        if folders:
+            result_parts.append("Folders:\n" + "\n".join(folders))
+        if notes:
+            result_parts.append("Notes:\n" + "\n".join(sorted(notes)))
+
+        if not folders and not notes:
+            result_parts.append("(empty)")
+
+        return "\n\n".join(result_parts)
+    except Exception as e:
+        return f"Error listing notes: {e}"
+
+
+@mcp.tool()
+def add_obsidian_journal_entry(entry: str, journal_folder: str = "Journal", entry_time: bool = True) -> str:
+    """Add an entry to today's journal note."""
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+    
+    # Use US/Eastern timezone (you can make this configurable)
+    user_timezone = "America/New_York"
+    now = datetime.now(ZoneInfo(user_timezone))
+    date_str = now.strftime("%Y-%m-%d")
+    journal_path = f"{journal_folder}/{date_str}.md"
+    
+    note_path = OBSIDIAN_VAULT / journal_path
+
+    try:
+        note_path.resolve().relative_to(OBSIDIAN_VAULT.resolve())
+    except ValueError:
+        return "Error: Path must be within the Obsidian vault"
+
+    # Format entry with timestamp if requested
+    if entry_time:
+        time_str = now.strftime("%I:%M %p")
+        formatted_entry = f"### {time_str}\n\n{entry}"
+    else:
+        formatted_entry = entry
+
+    # Check if this is a new journal file - add date header if so
+    if not note_path.exists():
+        date_header = now.strftime("# %A, %B %d, %Y\n\n")
+        formatted_entry = date_header + formatted_entry
+
+    try:
+        # Append to existing or create new
+        if note_path.exists():
+            existing = note_path.read_text(encoding="utf-8")
+            new_content = existing.rstrip() + "\n\n" + formatted_entry
+        else:
+            note_path.parent.mkdir(parents=True, exist_ok=True)
+            new_content = formatted_entry
+
+        note_path.write_text(new_content, encoding="utf-8")
+        return f"✅ Successfully added journal entry to: {journal_path}"
+    except Exception as e:
+        return f"Error adding journal entry: {e}"
 
 
 # === ENTRY POINT ===

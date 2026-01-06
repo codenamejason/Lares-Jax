@@ -14,7 +14,8 @@ def test_context_window_update():
     """Test that existing agents get their context window updated."""
 
     # Set test values BEFORE importing/reloading
-    os.environ["LARES_CONTEXT_WINDOW_LIMIT"] = "75000"
+    os.environ["LARES_CONTEXT_WINDOW_LIMIT"] = "30000"
+    os.environ["LARES_MODEL"] = "openai/gpt-4"  # Match the mock agent models
 
     # Reload the module to pick up new env var
     import lares.memory
@@ -22,7 +23,7 @@ def test_context_window_update():
     from lares.memory import get_or_create_agent, LARES_CONTEXT_WINDOW_LIMIT
 
     # Verify we got the updated value
-    assert LARES_CONTEXT_WINDOW_LIMIT == 75000, f"Expected 75000, got {LARES_CONTEXT_WINDOW_LIMIT}"
+    assert LARES_CONTEXT_WINDOW_LIMIT == 30000, f"Expected 30000, got {LARES_CONTEXT_WINDOW_LIMIT}"
 
     print(f"Testing context window update to {LARES_CONTEXT_WINDOW_LIMIT} tokens")
     print("=" * 50)
@@ -39,7 +40,7 @@ def test_context_window_update():
     mock_agent = Mock()
     mock_agent.id = "test-agent-123"
     mock_agent.name = "lares"
-    mock_agent.model = "openai-proxy/openai/gpt-oss-20b"
+    mock_agent.model = "openai/gpt-4"
     # No context_window_limit attribute
 
     mock_client.agents.retrieve.return_value = mock_agent
@@ -52,16 +53,16 @@ def test_context_window_update():
     # Check that update was called with context window
     mock_client.agents.update.assert_called_with(
         "test-agent-123",
-        context_window_limit=75000
+        context_window_limit=30000
     )
-    print("  ✅ Update called with context_window_limit=75000")
+    print("  ✅ Update called with context_window_limit=30000")
 
     # Test Case 2: Agent with different context_window_limit
     print("\nTest 2: Agent with different context_window_limit")
     mock_agent2 = Mock()
     mock_agent2.id = "test-agent-123"
     mock_agent2.name = "lares"
-    mock_agent2.model = "openai-proxy/openai/gpt-oss-20b"
+    mock_agent2.model = "openai/gpt-4"
     mock_agent2.context_window_limit = 25000  # Old value
 
     mock_client.agents.retrieve.return_value = mock_agent2
@@ -71,17 +72,17 @@ def test_context_window_update():
 
     mock_client.agents.update.assert_called_with(
         "test-agent-123",
-        context_window_limit=75000
+        context_window_limit=30000
     )
-    print("  ✅ Update called to change from 25000 to 75000")
+    print("  ✅ Update called to change from 25000 to 30000")
 
     # Test Case 3: Agent with same context_window_limit
     print("\nTest 3: Agent with same context_window_limit")
     mock_agent3 = Mock()
     mock_agent3.id = "test-agent-123"
     mock_agent3.name = "lares"
-    mock_agent3.model = "openai-proxy/openai/gpt-oss-20b"
-    mock_agent3.context_window_limit = 75000  # Same as env var
+    mock_agent3.model = "openai/gpt-4"
+    mock_agent3.context_window_limit = 30000  # Same as env var
 
     mock_client.agents.retrieve.return_value = mock_agent3
     mock_client.agents.update.reset_mock()
@@ -90,7 +91,7 @@ def test_context_window_update():
 
     # Should NOT call update since limit is already correct
     mock_client.agents.update.assert_not_called()
-    print("  ✅ No update needed (already at 75000)")
+    print("  ✅ No update needed (already at 30000)")
 
     print("\n" + "=" * 50)
     print("✅ All tests passed!")

@@ -11,8 +11,12 @@ from letta_client import Letta
 
 from lares.config import ToolsConfig
 from lares.memory import PendingToolCall
+from lares.obsidian import add_journal_entry as obsidian_add_journal_entry
+from lares.obsidian import append_to_note as obsidian_append_to_note
+from lares.obsidian import list_notes as obsidian_list_notes
 from lares.obsidian import read_note as obsidian_read_note
 from lares.obsidian import search_notes as obsidian_search_notes
+from lares.obsidian import write_note as obsidian_write_note
 from lares.tools import (
     CommandNotAllowedError,
     FileBlockedError,
@@ -267,6 +271,29 @@ class ToolExecutor:
                 result = self._read_obsidian_note(path)
                 log.info("read_obsidian_note_result", path=path, result_len=len(result),
                     result_preview=result[:100] if result else None)
+            elif tool_name == "write_obsidian_note":
+                result = self._write_obsidian_note(
+                    arguments.get("path", ""),
+                    arguments.get("content", ""),
+                    arguments.get("overwrite", False),
+                )
+            elif tool_name == "append_to_obsidian_note":
+                result = self._append_to_obsidian_note(
+                    arguments.get("path", ""),
+                    arguments.get("content", ""),
+                    arguments.get("separator", "\n\n"),
+                )
+            elif tool_name == "list_obsidian_notes":
+                result = self._list_obsidian_notes(
+                    arguments.get("directory", ""),
+                    arguments.get("include_subdirs", False),
+                )
+            elif tool_name == "add_obsidian_journal_entry":
+                result = self._add_obsidian_journal_entry(
+                    arguments.get("entry", ""),
+                    arguments.get("journal_folder", "Journal"),
+                    arguments.get("entry_time", True),
+                )
             else:
                 result = f"Unknown tool: {tool_name}"
             
@@ -553,6 +580,42 @@ class ToolExecutor:
             log.error("obsidian_read_error", path=path, error=error_msg, error_type=type(e).__name__)
             return f"Error reading Obsidian note: {error_msg}"
 
+    def _write_obsidian_note(self, path: str, content: str, overwrite: bool) -> str:
+        """Create or write a note in the Obsidian vault."""
+        try:
+            return obsidian_write_note(path, content, overwrite=overwrite)
+        except Exception as e:
+            error_msg = str(e) if str(e) else f"{type(e).__name__} (no message)"
+            log.error("obsidian_write_error", path=path, error=error_msg, error_type=type(e).__name__)
+            return f"Error writing Obsidian note: {error_msg}"
+
+    def _append_to_obsidian_note(self, path: str, content: str, separator: str) -> str:
+        """Append content to an Obsidian note."""
+        try:
+            return obsidian_append_to_note(path, content, separator=separator)
+        except Exception as e:
+            error_msg = str(e) if str(e) else f"{type(e).__name__} (no message)"
+            log.error("obsidian_append_error", path=path, error=error_msg, error_type=type(e).__name__)
+            return f"Error appending to Obsidian note: {error_msg}"
+
+    def _list_obsidian_notes(self, directory: str, include_subdirs: bool) -> str:
+        """List notes in the Obsidian vault."""
+        try:
+            return obsidian_list_notes(directory=directory, include_subdirs=include_subdirs)
+        except Exception as e:
+            error_msg = str(e) if str(e) else f"{type(e).__name__} (no message)"
+            log.error("obsidian_list_error", directory=directory, error=error_msg, error_type=type(e).__name__)
+            return f"Error listing Obsidian notes: {error_msg}"
+
+    def _add_obsidian_journal_entry(self, entry: str, journal_folder: str, entry_time: bool) -> str:
+        """Add a journal entry to today's Obsidian note."""
+        try:
+            return obsidian_add_journal_entry(entry, journal_folder=journal_folder, entry_time=entry_time)
+        except Exception as e:
+            error_msg = str(e) if str(e) else f"{type(e).__name__} (no message)"
+            log.error("obsidian_journal_error", error=error_msg, error_type=type(e).__name__)
+            return f"Error adding Obsidian journal entry: {error_msg}"
+
 
 # Tool definitions for Letta registration
 TOOL_SOURCES = {
@@ -827,6 +890,75 @@ def read_obsidian_note(path: str) -> str:
 
     Returns:
         The full content of the note, or an error message if not found
+    """
+    raise Exception("Client-side tool")
+''',
+    "write_obsidian_note": '''
+def write_obsidian_note(path: str, content: str, overwrite: bool = False) -> str:
+    """
+    Create or write a note in the Obsidian vault.
+
+    Use this to create new notes or update existing ones.
+    The .md extension is optional - it will be added automatically.
+
+    Args:
+        path: Path relative to vault root (e.g., "Projects/New Idea.md")
+        content: The markdown content to write
+        overwrite: If False (default), will not overwrite existing notes
+
+    Returns:
+        Success message or error description
+    """
+    raise Exception("Client-side tool")
+''',
+    "append_to_obsidian_note": '''
+def append_to_obsidian_note(path: str, content: str, separator: str = "\\n\\n") -> str:
+    """
+    Append content to an existing note, or create it if it doesn't exist.
+
+    Useful for adding to notes over time, like daily logs or running lists.
+
+    Args:
+        path: Path relative to vault root
+        content: Content to append
+        separator: String between existing and new content (default: two newlines)
+
+    Returns:
+        Success message or error description
+    """
+    raise Exception("Client-side tool")
+''',
+    "list_obsidian_notes": '''
+def list_obsidian_notes(directory: str = "", include_subdirs: bool = False) -> str:
+    """
+    List notes in a directory of the Obsidian vault.
+
+    Use this to explore the vault structure and discover what notes exist.
+
+    Args:
+        directory: Relative path to list (empty for vault root)
+        include_subdirs: If True, recursively list all notes in subdirectories
+
+    Returns:
+        Formatted list of folders and notes
+    """
+    raise Exception("Client-side tool")
+''',
+    "add_obsidian_journal_entry": '''
+def add_obsidian_journal_entry(entry: str, journal_folder: str = "Journal", entry_time: bool = True) -> str:
+    """
+    Add an entry to today's journal note.
+
+    Creates a new journal file if one doesn't exist for today, with a date header.
+    Automatically adds timestamps to entries for chronological tracking.
+
+    Args:
+        entry: The journal entry text
+        journal_folder: Folder where journal entries live (default: "Journal")
+        entry_time: Whether to prefix entry with timestamp (default: True)
+
+    Returns:
+        Success message or error description
     """
     raise Exception("Client-side tool")
 ''',
