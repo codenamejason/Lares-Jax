@@ -441,3 +441,10 @@ Lares automatically connects to the MCP server and attaches tools to the Letta a
 LARES_MCP_URL=http://localhost:8765/sse
 ```
 
+export BLUESKY_SESSION_TOKEN=$(curl -s -X POST https://bsky.social/xrpc/com.atproto.server.createSession \
+  -H "Content-Type: application/json" \
+  -d '{"identifier":"jaxcoder.bsky.social","password":""}' | jq -r .accessJwt)
+
+  curl -s -X POST https://bsky.social/xrpc/com.atproto.server.createSession \
+  -H "Content-Type: application/json" \
+  -d '{"identifier":"jaxcoder.bsky.social","password":"5eot-5yw6-bvty-wldw"}'

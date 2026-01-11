@@ -1048,6 +1048,53 @@ def add_obsidian_journal_entry(entry: str, journal_folder: str = "Journal", entr
         return f"Error adding journal entry: {e}"
 
 
+# === GOOGLE CALENDAR TOOLS ===
+
+
+@mcp.tool()
+def list_calendar_events(max_results: int = 10) -> str:
+    """List upcoming Google Calendar events."""
+    from lares.tools.google_calendar import list_upcoming_events
+    return list_upcoming_events(max_results=max_results)
+
+
+@mcp.tool()
+async def create_calendar_event(
+    summary: str,
+    start_time: str,
+    end_time: str,
+    description: str = ""
+) -> str:
+    """Create a new Google Calendar event. Requires approval."""
+    # For MCP, we'll require approval through the queue
+    approval_id = approval_queue.submit(
+        "create_calendar_event",
+        {
+            "summary": summary,
+            "start_time": start_time,
+            "end_time": end_time,
+            "description": description,
+        }
+    )
+
+    await push_event("approval_needed", {
+        "id": approval_id,
+        "tool": "create_calendar_event",
+        "summary": summary,
+        "start_time": start_time,
+        "end_time": end_time,
+    })
+
+    return f"📅 Calendar event queued for approval. ID: {approval_id}"
+
+
+@mcp.tool()
+def search_calendar_events(query: str, max_results: int = 10) -> str:
+    """Search Google Calendar events."""
+    from lares.tools.google_calendar import search_events
+    return search_events(query=query, max_results=max_results)
+
+
 # === ENTRY POINT ===
 
 
@@ -1103,7 +1150,8 @@ if __name__ == "__main__":
     print("Starting Lares MCP Server on http://0.0.0.0:8765")
     print("Tools: read_file, list_directory, write_file, run_shell_command")
     print("       read_rss_feed, read_bluesky_user, search_bluesky, post_to_bluesky")
-    print("       search_obsidian_notes, read_obsidian_note")
+    print("       search_obsidian_notes, read_obsidian_note, write_obsidian_note")
+    print("       list_calendar_events, create_calendar_event, search_calendar_events")
     print("       discord_send_message, discord_react")
     print("Endpoints: /health, /events, /approvals/pending, /approvals/{id}")
     if DISCORD_ENABLED:

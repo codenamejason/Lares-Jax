@@ -38,6 +38,11 @@ from lares.tools import (
     validate_tool_code,
     write_file,
 )
+from lares.tools.google_calendar import (
+    list_upcoming_events,
+    create_event,
+    search_events,
+)
 
 log = structlog.get_logger()
 
@@ -293,6 +298,20 @@ class ToolExecutor:
                     arguments.get("entry", ""),
                     arguments.get("journal_folder", "Journal"),
                     arguments.get("entry_time", True),
+                )
+            elif tool_name == "list_calendar_events":
+                result = self._list_calendar_events(arguments.get("max_results", 10))
+            elif tool_name == "create_calendar_event":
+                result = await self._create_calendar_event(
+                    arguments.get("summary", ""),
+                    arguments.get("start_time", ""),
+                    arguments.get("end_time", ""),
+                    arguments.get("description", ""),
+                )
+            elif tool_name == "search_calendar_events":
+                result = self._search_calendar_events(
+                    arguments.get("query", ""),
+                    arguments.get("max_results", 10),
                 )
             else:
                 result = f"Unknown tool: {tool_name}"
@@ -615,6 +634,59 @@ class ToolExecutor:
             error_msg = str(e) if str(e) else f"{type(e).__name__} (no message)"
             log.error("obsidian_journal_error", error=error_msg, error_type=type(e).__name__)
             return f"Error adding Obsidian journal entry: {error_msg}"
+
+    def _list_calendar_events(self, max_results: int) -> str:
+        """List calendar events."""
+        return list_upcoming_events(max_results=max_results)
+
+    async def _create_calendar_event(
+        self, summary: str, start_time: str, end_time: str, description: str
+    ) -> str:
+        """Create calendar event with approval."""
+        # Calendar modifications require approval
+        approval_id = self.approval_queue.submit(
+            "create_calendar_event",
+            {
+                "summary": summary,
+                "start_time": start_time,
+                "end_time": end_time,
+                "description": description,
+            }
+        )
+
+        if self.mcp_url:
+            return await self._request_mcp_approval(
+                "create_calendar_event",
+                {
+                    "summary": summary,
+                    "start_time": start_time,
+                    "end_time": end_time,
+                    "description": description,
+                }
+            )
+
+        # Fallback to Discord approval
+        if self.channel is None:
+            return "Error: No approval mechanism available for calendar event creation"
+
+        # Request approval via Discord
+        embed = discord.Embed(
+            title="📅 Calendar Event Creation",
+            description=f"**{summary}**\n{start_time} - {end_time}",
+            color=discord.Color.blue(),
+        )
+        if description:
+            embed.add_field(name="Description", value=description, inline=False)
+
+        message = await self.channel.send(embed=embed)
+        await message.add_reaction("✅")
+        await message.add_reaction("❌")
+
+        return f"📅 Calendar event queued for approval (message #{message.id})"
+
+    def _search_calendar_events(self, query: str, max_results: int) -> str:
+        """Search calendar events."""
+        return search_events(query=query, max_results=max_results)
 
 
 # Tool definitions for Letta registration
@@ -959,6 +1031,60 @@ def add_obsidian_journal_entry(entry: str, journal_folder: str = "Journal", entr
 
     Returns:
         Success message or error description
+    """
+    raise Exception("Client-side tool")
+''',
+    "list_calendar_events": '''
+def list_calendar_events(max_results: int = 10) -> str:
+    """
+    List upcoming events from Google Calendar.
+
+    Use this to check your schedule and see what events are coming up.
+    Shows events starting from now onwards.
+
+    Args:
+        max_results: Maximum number of events to return (default 10)
+
+    Returns:
+        Formatted list of upcoming calendar events with dates and times
+    """
+    raise Exception("Client-side tool")
+''',
+    "create_calendar_event": '''
+def create_calendar_event(summary: str, start_time: str, end_time: str, description: str = "") -> str:
+    """
+    Create a new event in Google Calendar.
+
+    Use this to schedule meetings, appointments, or reminders.
+    Times should be in ISO format (e.g., "2025-01-15T10:00:00").
+
+    IMPORTANT: This tool requires human approval before execution.
+
+    Args:
+        summary: Event title/summary
+        start_time: Start time in ISO format (e.g., "2025-01-15T10:00:00")
+        end_time: End time in ISO format (e.g., "2025-01-15T11:00:00")
+        description: Optional event description
+
+    Returns:
+        Success message with event ID
+    """
+    raise Exception("Client-side tool")
+''',
+    "search_calendar_events": '''
+def search_calendar_events(query: str, max_results: int = 10) -> str:
+    """
+    Search for events in Google Calendar containing the query text.
+
+    Use this to find specific events by title, description, or other content.
+    Searches across all your calendar events.
+
+    Args:
+        query: Search query string (searches titles and descriptions)
+        max_results: Maximum number of results (default 10)
+
+    Returns:
+        Formatted list of matching events with dates and times
     """
     raise Exception("Client-side tool")
 ''',
