@@ -37,6 +37,10 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse, StreamingResponse
 
 from lares.mcp_approval import get_queue
+from lares.memory import create_letta_client, get_or_create_agent, send_message, send_tool_result
+from lares.config import load_config
+from lares.tool_registry import ToolExecutor
+from lares.time_utils import get_time_context
 
 # Initialize MCP server
 mcp = FastMCP(
@@ -399,6 +403,86 @@ async def health_check(request: Request) -> JSONResponse:
             "pending_approvals": len(approval_queue.get_pending()),
         }
     )
+
+
+@mcp.custom_route("/chat", methods=["POST"])
+async def chat_endpoint(request: Request) -> JSONResponse:
+    """Chat endpoint for desktop apps to interact with Lares.
+
+    Expects JSON: {"message": "user message", "user_id": "optional_user_id"}
+    Returns: {"response": "lares_reply", "timestamp": "iso_timestamp"}
+    """
+    try:
+        # Check API key authentication
+        auth_header = request.headers.get("authorization", "")
+        expected_key = os.getenv("LARES_API_KEY", "")
+        if expected_key and not auth_header.startswith("Bearer "):
+            return JSONResponse({"error": "Missing authorization header"}, status_code=401)
+        if expected_key and auth_header != f"Bearer {expected_key}":
+            return JSONResponse({"error": "Invalid API key"}, status_code=401)
+
+        # Parse request
+        data = await request.json()
+        message = data.get("message", "").strip()
+        user_id = data.get("user_id", "desktop-user")
+
+        if not message:
+            return JSONResponse({"error": "message is required"}, status_code=400)
+
+        # Initialize Lares components (lazy load)
+        config = load_config()
+        letta_client = create_letta_client(config)
+        agent_id = await get_or_create_agent(letta_client, config)
+        tool_executor = ToolExecutor(config.tools, letta_client, agent_id, mcp_url=f"http://localhost:{mcp.port}")
+
+        # Format message for Letta (similar to Discord processing)
+        current_time = get_time_context(config.user.timezone)
+        formatted_message = f"Current time: {current_time}\n\n[Desktop app message from {user_id}]: {message}"
+
+        # Process message through Lares (similar to handle_message in main_mcp.py)
+        response = await send_message(letta_client, agent_id, formatted_message)
+
+        # Handle memory compaction
+        if response.needs_retry:
+            response = await send_message(letta_client, agent_id, formatted_message, retry_on_compaction=False)
+
+        # Process tool calls if any
+        max_iterations = int(os.getenv("LARES_MAX_TOOL_ITERATIONS", "10"))
+        iterations = 0
+
+        while response.pending_tool_calls and iterations < max_iterations:
+            iterations += 1
+            for tool_call in response.pending_tool_calls:
+                result = await tool_executor.execute(tool_call.name, tool_call.arguments or {})
+                response = await send_tool_result(
+                    letta_client, agent_id, tool_call.tool_call_id, str(result) if result else "Done"
+                )
+
+                # Handle memory compaction during tool execution
+                if response.needs_retry:
+                    response = await send_tool_result(
+                        letta_client, agent_id, tool_call.tool_call_id, str(result) if result else "Done",
+                        retry_on_compaction=False
+                    )
+
+        # Create response with CORS headers
+        response_data = {
+            "response": response.text or "I processed your request but have no response to show.",
+            "timestamp": datetime.now(UTC).isoformat(),
+            "tools_used": len(response.pending_tool_calls) if hasattr(response, 'pending_tool_calls') else 0
+        }
+
+        json_response = JSONResponse(response_data)
+        # Add CORS headers manually
+        json_response.headers["Access-Control-Allow-Origin"] = "http://localhost:1420"
+        json_response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
+        json_response.headers["Access-Control-Allow-Headers"] = "*"
+        json_response.headers["Access-Control-Allow-Credentials"] = "true"
+
+        return json_response
+
+    except Exception as e:
+        return JSONResponse({"error": f"Chat processing failed: {str(e)}"}, status_code=500)
 
 
 @mcp.custom_route("/events", methods=["GET"])
@@ -1153,7 +1237,7 @@ if __name__ == "__main__":
     print("       search_obsidian_notes, read_obsidian_note, write_obsidian_note")
     print("       list_calendar_events, create_calendar_event, search_calendar_events")
     print("       discord_send_message, discord_react")
-    print("Endpoints: /health, /events, /approvals/pending, /approvals/{id}")
+    print("Endpoints: /health, /chat, /events, /approvals/pending, /approvals/{id}")
     if DISCORD_ENABLED:
         print(f"Discord: enabled (channel {DISCORD_CHANNEL_ID})")
         asyncio.run(run_with_discord())
