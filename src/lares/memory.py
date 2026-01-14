@@ -64,7 +64,7 @@ def create_letta_client(config: Config) -> Letta:
 
 # Model configuration - reads from LARES_MODEL or OLLAMA_MODEL env vars
 # Format must be: provider/model-name (e.g., openai-proxy/openai/gpt-oss-20b, openai/gpt-4, etc.)
-LARES_MODEL = os.getenv("LARES_MODEL"  "openai-proxy/openai/gpt-oss-120b", os.getenv("OLLAMA_MODEL", "openai-proxy/openai/gpt-oss-120b"))
+LARES_MODEL = os.getenv("LARES_MODEL", os.getenv("OLLAMA_MODEL", "openai-proxy/openai/gpt-oss-120b"))
 # Context window limit (default: 50k tokens)
 LARES_CONTEXT_WINDOW_LIMIT = int(os.getenv("LARES_CONTEXT_WINDOW_LIMIT", "50000"))
 
