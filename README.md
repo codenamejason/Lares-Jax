@@ -1,26 +1,26 @@
 <p align="center">
-  <img src="docs/logo.png" alt="Lares logo" width="250">
+  <img src="docs/logo.png" alt="Jax Assistant logo" width="250">
 </p>
 
 
 ![Stability: Experimental](https://img.shields.io/badge/stability-experimental-red)
 
-# Lares
+# Jax Assistant
 
 A stateful AI agent with persistent memory - your household guardian.
 
-Inspired by [Strix](https://timkellogg.me/blog/2025/12/15/strix), Lares is an ambient AI assistant that maintains memory across conversations, learns about you over time, and can act proactively.
+Inspired by [Strix](https://timkellogg.me/blog/2025/12/15/strix), Jax Assistant is an ambient AI assistant that maintains memory across conversations, learns about you over time, and can act proactively.
 
 ## Features
 
 - **Persistent Memory**: Uses [Letta](https://letta.com) for long-term memory that survives restarts
-- **Discord Interface**: Chat with Lares through Discord
+- **Discord Interface**: Chat with Jax Assistant through Discord
 - **Memory Blocks**: Organized memory for identity, human preferences, state, and ideas
 - **Autonomous Operation**: "Perch time" ticks every hour for self-reflection and proactive actions
 - **Scheduled Tasks**: Set reminders and recurring jobs with flexible scheduling
 - **Self-Management**: Can restart itself for updates and maintenance
 - **Tool System**: File operations, shell commands, RSS feeds, BlueSky integration, and more
-- **Skills System**: Procedural memory through markdown files - teaches Lares how to perform tasks
+- **Skills System**: Procedural memory through markdown files - teaches Jax Assistant how to perform tasks
 - **MCP Server**: Portable tool layer via Model Context Protocol - connect any MCP-compatible system
 - **Extensible**: Designed for adding new interfaces (Telegram, web) and capabilities
 
@@ -35,9 +35,6 @@ Inspired by [Strix](https://timkellogg.me/blog/2025/12/15/strix), Lares is an am
 ### Installation
 
 ```bash
-# Clone the repository
-git clone https://git.v37.io/daniele/lares.git
-cd lares
 
 # Create virtual environment
 python -m venv .venv
@@ -47,7 +44,7 @@ source .venv/bin/activate
 pip install -e ".[dev]"
 
 # (Optional) Enable self-restart capability
-# This allows Lares to restart itself for updates and maintenance
+# This allows Jax Assistant to restart itself for updates and maintenance
 sudo bash scripts/setup-sudoers.sh
 ```
 
@@ -60,7 +57,7 @@ cp .env.example .env
 # Edit .env with your credentials:
 # - LETTA_API_KEY: From app.letta.com (or use LETTA_BASE_URL for self-hosted)
 # - DISCORD_BOT_TOKEN: From Discord Developer Portal
-# - DISCORD_CHANNEL_ID: The channel where Lares will listen
+# - DISCORD_CHANNEL_ID: The channel where Jax Assistant will listen
 # - ANTHROPIC_API_KEY: For the LLM (required for self-hosted Letta)
 
 # Optional integrations:
@@ -125,12 +122,12 @@ For testing and development locally:
 # Activate virtual environment
 source .venv/bin/activate
 
-# Run Lares directly
+# Run Jax Assistant directly
 python run.py
 # or if installed: lares
 ```
 
-On first run, Lares will create a new agent and print an `LARES_AGENT_ID` - add this to your `.env` to persist the agent across restarts.
+On first run, Jax will create a new agent and print an `LARES_AGENT_ID` - add this to your `.env` to persist the agent across restarts.
 
 #### Production Mode (systemd)
 
@@ -153,13 +150,13 @@ journalctl -u lares.service -f
 
 # Common management commands:
 sudo systemctl status lares.service  # Check status
-sudo systemctl restart lares.service # Restart Lares
-sudo systemctl stop lares.service    # Stop Lares
+sudo systemctl restart lares.service # Restart Jax Assistant
+sudo systemctl stop lares.service    # Stop Jax Assistant
 journalctl -u lares.service -n 50    # View last 50 log lines
 ```
 
 The systemd service:
-- Automatically starts Letta Docker container before Lares
+- Automatically starts Letta Docker container before Jax Assistant
 - Restarts on failure
 - Runs with proper virtual environment
 - Logs to systemd journal
@@ -186,28 +183,28 @@ LETTA_BASE_URL=http://localhost:8283
 
 ## Approval Workflows
 
-Lares implements two types of approval workflows for sensitive operations:
+Jax Assistant implements two types of approval workflows for sensitive operations:
 
 ### Command Approval (Synchronous)
-When Lares tries to run a shell command not in the allowlist:
+When Jax Assistant tries to run a shell command not in the allowlist:
 1. Sends approval request to Discord with ✅/❌ reactions
 2. **Waits up to 5 minutes** for your response
 3. If approved: adds command to allowlist and executes
-4. If denied or timeout: returns error to Lares
+4. If denied or timeout: returns error to Jax Assistant
 
 ### BlueSky Post Approval (Asynchronous)
-When Lares wants to post to BlueSky:
+When Jax Assistant wants to post to BlueSky:
 1. Sends approval request to Discord with post preview
-2. **Returns immediately** - Lares continues other work
+2. **Returns immediately** - Jax Assistant continues other work
 3. You can approve/deny anytime (even hours later)
 4. When approved: post is sent to BlueSky
 5. When denied: post is discarded
 
-This async pattern prevents Lares from being blocked while waiting for approval.
+This async pattern prevents Jax Assistant from being blocked while waiting for approval.
 
 ## Self-Restart Capability
 
-Lares can restart itself when needed (e.g., after updates, configuration changes, or for maintenance). This requires passwordless sudo access for the restart command.
+Jax Assistant can restart itself when needed (e.g., after updates, configuration changes, or for maintenance). This requires passwordless sudo access for the restart command.
 
 ### Setup
 
@@ -231,10 +228,10 @@ The sudoers configuration is minimal and scoped:
 
 ### Usage
 
-Once configured, Lares can restart itself by calling the `restart_lares()` tool:
+Once configured, Jax Assistant can restart itself by calling the `restart_lares()` tool:
 
 ```python
-# Lares can decide when to restart, such as:
+# Jax Assistant can decide when to restart, such as:
 # - After git pull to apply updates
 # - When .env configuration changes
 # - For periodic maintenance during perch time
@@ -285,29 +282,29 @@ src/lares/
 
 ### Memory Compaction Recovery
 
-Lares gracefully handles Letta's automatic memory compaction when conversations exceed context limits:
+Jax Assistant gracefully handles Letta's automatic memory compaction when conversations exceed context limits:
 
 1. **Detection**: System alerts about memory constraints are automatically detected
 2. **Notification**: Shows "💭 *Reorganizing my thoughts...*" in Discord
 3. **Automatic Retry**: The interrupted operation is retried after compaction
-4. **Continuity**: Lares completes intended actions (especially important during perch time)
+4. **Continuity**: Jax Assistant completes intended actions (especially important during perch time)
 
-This ensures Lares never gets "stunned" by memory compaction and maintains continuous operation.
+This ensures Jax Assistant never gets "stunned" by memory compaction and maintains continuous operation.
 
 ### Memory Blocks
 
-Lares uses four memory blocks:
+Jax Assistant uses four memory blocks:
 
 | Block | Purpose |
 |-------|---------|
-| `persona` | Lares's identity and personality |
+| `persona` | Jax Assistant's identity and personality |
 | `human` | Information about you |
 | `state` | Current working memory and tasks |
 | `ideas` | Feature ideas and future plans |
 
 ### Skills (Procedural Memory)
 
-Skills are markdown files that teach Lares how to perform specific tasks. Inspired by [Letta Code's skill learning](https://www.letta.com/blog/skill-learning), they provide:
+Skills are markdown files that teach Jax Assistant how to perform specific tasks. Inspired by [Letta Code's skill learning](https://www.letta.com/blog/skill-learning), they provide:
 
 - **Persistent procedural knowledge** that survives context resets
 - **On-demand loading** - only loaded when needed (context-efficient)
@@ -318,11 +315,11 @@ Example skills in `examples/skills/`:
 - `perch-tick.md` - Autonomous time decision framework  
 - `discord-interaction.md` - Communication patterns
 
-Skills are indexed in Lares's persona (lightweight pointers) and loaded via `read_file` when performing related tasks.
+Skills are indexed in Jax Assistant's persona (lightweight pointers) and loaded via `read_file` when performing related tasks.
 
 ### Available Tools
 
-Lares has access to 20 tools (native + MCP), plus optional Obsidian integration:
+Jax Assistant has access to 20 tools (native + MCP), plus optional Obsidian integration:
 
 #### Native Tools (10)
 
@@ -340,7 +337,7 @@ Lares has access to 20 tools (native + MCP), plus optional Obsidian integration:
 | `post_to_bluesky` | Post to BlueSky (async approval workflow) |
 | `discord_send_message` | Send messages to Discord (reply mode optional) |
 | `discord_react` | React to messages with emoji |
-| `restart_lares` | Restart the Lares service |
+| `restart_lares` | Restart the Jax Assistant service |
 | `create_tool` | Create new tools from Python code |
 
 #### Obsidian Integration (6, optional)
@@ -385,13 +382,13 @@ This software is licensed under the PolyForm Noncommercial License 1.0.0, a mode
 - ❌ **NOT free as a service** - Cannot host or offer as SaaS
 
 ### Why this license?
-Lares is a labor of love meant to empower individuals. The PolyForm Noncommercial license provides crystal-clear terms that prevent any commercial exploitation while keeping the software freely available for personal, educational, and charitable use.
+Jax Assistant is a labor of love meant to empower individuals. The PolyForm Noncommercial license provides crystal-clear terms that prevent any commercial exploitation while keeping the software freely available for personal, educational, and charitable use.
 
 See [LICENSE](LICENSE) for full terms.
 
 ## MCP Server
 
-Lares includes an MCP (Model Context Protocol) server that exposes tools in a framework-agnostic way. This enables portability - you can connect any MCP-compatible system (Letta, Claude Desktop, etc.) to use Lares tools.
+Jax Assistant includes an MCP (Model Context Protocol) server that exposes tools in a framework-agnostic way. This enables portability - you can connect any MCP-compatible system (Letta, Claude Desktop, etc.) to use Jax Assistant tools.
 
 ### Running the MCP Server
 
@@ -431,20 +428,12 @@ POST /approvals/{id}/deny    - Deny request
 GET  /health                 - Health check
 ```
 
-Lares bridges this queue to Discord, allowing you to approve/deny via reactions.
+Jax Assistant bridges this queue to Discord, allowing you to approve/deny via reactions.
 
 ### Connecting Letta to MCP
 
-Lares automatically connects to the MCP server and attaches tools to the Letta agent. Configuration in `.env`:
+Jax Assistant automatically connects to the MCP server and attaches tools to the Letta agent. Configuration in `.env`:
 
 ```
 LARES_MCP_URL=http://localhost:8765/sse
 ```
-
-export BLUESKY_SESSION_TOKEN=$(curl -s -X POST https://bsky.social/xrpc/com.atproto.server.createSession \
-  -H "Content-Type: application/json" \
-  -d '{"identifier":"jaxcoder.bsky.social","password":""}' | jq -r .accessJwt)
-
-  curl -s -X POST https://bsky.social/xrpc/com.atproto.server.createSession \
-  -H "Content-Type: application/json" \
-  -d '{"identifier":"jaxcoder.bsky.social","password":"5eot-5yw6-bvty-wldw"}'
