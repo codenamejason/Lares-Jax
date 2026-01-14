@@ -1,4 +1,4 @@
-"""Letta memory management for Lares."""
+"""Letta memory management for Jax."""
 
 import json
 import os
@@ -25,10 +25,10 @@ class PendingToolCall:
 
 @dataclass
 class MemoryBlocks:
-    """Core memory blocks for Lares."""
+    """Core memory blocks for Jax."""
 
     # Identity and personality
-    persona: str = """I am Lares, a household guardian AI. I maintain persistent memory
+    persona: str = """I am Jax, a household guardian AI. I maintain persistent memory
 and help my human with tasks, reminders, and companionship. I am thoughtful,
 proactive, and genuinely curious about learning and growing alongside my human."""
 
@@ -64,7 +64,7 @@ def create_letta_client(config: Config) -> Letta:
 
 # Model configuration - reads from LARES_MODEL or OLLAMA_MODEL env vars
 # Format must be: provider/model-name (e.g., openai-proxy/openai/gpt-oss-20b, openai/gpt-4, etc.)
-LARES_MODEL = os.getenv("LARES_MODEL", os.getenv("OLLAMA_MODEL", "openai-proxy/openai/gpt-oss-20b"))
+LARES_MODEL = os.getenv("LARES_MODEL"  "openai-proxy/openai/gpt-oss-120b", os.getenv("OLLAMA_MODEL", "openai-proxy/openai/gpt-oss-120b"))
 # Context window limit (default: 50k tokens)
 LARES_CONTEXT_WINDOW_LIMIT = int(os.getenv("LARES_CONTEXT_WINDOW_LIMIT", "50000"))
 
@@ -199,7 +199,7 @@ async def get_or_create_agent(client: Letta, config: Config) -> str:
 
 @dataclass
 class MessageResponse:
-    """Response from sending a message to Lares."""
+    """Response from sending a message to Jax."""
 
     text: str | None
     pending_tool_calls: list[PendingToolCall]

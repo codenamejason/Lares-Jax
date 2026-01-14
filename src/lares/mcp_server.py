@@ -1,7 +1,7 @@
 """
-Lares MCP Server - Portable tool layer for AI agents.
+Jax MCP Server - Portable tool layer for AI agents.
 
-This MCP server provides all Lares tools in a framework-agnostic way.
+This MCP server provides all Jax tools in a framework-agnostic way.
 Any MCP-compatible system (Letta, Claude Desktop, etc.) can connect to it.
 
 Run with: python -m lares.mcp_server
@@ -45,7 +45,7 @@ from lares.time_utils import get_time_context
 # Initialize MCP server
 mcp = FastMCP(
     name="lares-tools",
-    instructions="Lares household AI tools - shell, files, RSS, BlueSky, Obsidian",
+    instructions="Jax household AI tools - shell, files, RSS, BlueSky, Obsidian",
     host="0.0.0.0",
     port=8765,
 )
@@ -74,7 +74,7 @@ DISCORD_TOKEN = os.getenv("DISCORD_BOT_TOKEN", "")
 DISCORD_CHANNEL_ID = int(os.getenv("DISCORD_CHANNEL_ID", "0"))
 DISCORD_ENABLED = bool(DISCORD_TOKEN and DISCORD_CHANNEL_ID)
 
-# Event queues for SSE clients (Lares Core connects here)
+# Event queues for SSE clients (Jax Core connects here)
 _event_queues: list[asyncio.Queue] = []
 
 # Discord bot state
@@ -147,7 +147,7 @@ def setup_discord_bot() -> commands.Bot | None:
         message_id = str(payload.message_id)
         emoji = str(payload.emoji)
 
-        # Push all reactions to SSE - Lares handles approval logic via API calls
+        # Push all reactions to SSE - Jax handles approval logic via API calls
         await push_event(
             "discord_reaction",
             {
@@ -405,13 +405,22 @@ async def health_check(request: Request) -> JSONResponse:
     )
 
 
-@mcp.custom_route("/chat", methods=["POST"])
+@mcp.custom_route("/chat", methods=["POST", "OPTIONS"])
 async def chat_endpoint(request: Request) -> JSONResponse:
-    """Chat endpoint for desktop apps to interact with Lares.
+    """Chat endpoint for desktop apps to interact with Jax.
 
     Expects JSON: {"message": "user message", "user_id": "optional_user_id"}
     Returns: {"response": "lares_reply", "timestamp": "iso_timestamp"}
     """
+    # Handle CORS preflight OPTIONS request
+    if request.method == "OPTIONS":
+        response = JSONResponse({"status": "ok"})
+        response.headers["Access-Control-Allow-Origin"] = "http://localhost:1420"
+        response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
+        response.headers["Access-Control-Allow-Headers"] = "*"
+        response.headers["Access-Control-Allow-Credentials"] = "true"
+        return response
+
     try:
         # Check API key authentication
         auth_header = request.headers.get("authorization", "")
@@ -429,22 +438,25 @@ async def chat_endpoint(request: Request) -> JSONResponse:
         if not message:
             return JSONResponse({"error": "message is required"}, status_code=400)
 
-        # Initialize Lares components (lazy load)
+        # Initialize Jax components (lazy load)
         config = load_config()
         letta_client = create_letta_client(config)
-        agent_id = await get_or_create_agent(letta_client, config)
-        tool_executor = ToolExecutor(config.tools, letta_client, agent_id, mcp_url=f"http://localhost:{mcp.port}")
+        # Get agent ID from environment variables
+        agent_id = os.getenv("LARES_AGENT_ID")
+        if not agent_id:
+            return JSONResponse({"error": "LARES_AGENT_ID is not set"}, status_code=500)
+        tool_executor = ToolExecutor(config.tools, letta_client, agent_id, mcp_url="http://localhost:8765")
 
         # Format message for Letta (similar to Discord processing)
         current_time = get_time_context(config.user.timezone)
         formatted_message = f"Current time: {current_time}\n\n[Desktop app message from {user_id}]: {message}"
 
-        # Process message through Lares (similar to handle_message in main_mcp.py)
-        response = await send_message(letta_client, agent_id, formatted_message)
+        # Process message through Jax (similar to handle_message in main_mcp.py)
+        response = send_message(letta_client, agent_id, formatted_message)
 
         # Handle memory compaction
         if response.needs_retry:
-            response = await send_message(letta_client, agent_id, formatted_message, retry_on_compaction=False)
+            response = send_message(letta_client, agent_id, formatted_message, retry_on_compaction=False)
 
         # Process tool calls if any
         max_iterations = int(os.getenv("LARES_MAX_TOOL_ITERATIONS", "10"))
@@ -454,13 +466,13 @@ async def chat_endpoint(request: Request) -> JSONResponse:
             iterations += 1
             for tool_call in response.pending_tool_calls:
                 result = await tool_executor.execute(tool_call.name, tool_call.arguments or {})
-                response = await send_tool_result(
+                response = send_tool_result(
                     letta_client, agent_id, tool_call.tool_call_id, str(result) if result else "Done"
                 )
 
                 # Handle memory compaction during tool execution
                 if response.needs_retry:
-                    response = await send_tool_result(
+                    response = send_tool_result(
                         letta_client, agent_id, tool_call.tool_call_id, str(result) if result else "Done",
                         retry_on_compaction=False
                     )
@@ -487,7 +499,7 @@ async def chat_endpoint(request: Request) -> JSONResponse:
 
 @mcp.custom_route("/events", methods=["GET"])
 async def events_endpoint(request: Request) -> StreamingResponse:
-    """SSE endpoint for Lares Core to receive events (messages, reactions, etc.)."""
+    """SSE endpoint for Jax Core to receive events (messages, reactions, etc.)."""
     queue: asyncio.Queue = asyncio.Queue(maxsize=100)
     _event_queues.append(queue)
 
@@ -521,7 +533,7 @@ async def events_endpoint(request: Request) -> StreamingResponse:
 
 @mcp.custom_route("/discord/send", methods=["POST"])
 async def http_discord_send(request: Request) -> JSONResponse:
-    """HTTP endpoint for Lares to send Discord messages.
+    """HTTP endpoint for Jax to send Discord messages.
     
     Body: {"content": "message text", "reply_to": "optional_message_id"}
     """
@@ -552,7 +564,7 @@ async def http_discord_send(request: Request) -> JSONResponse:
 
 @mcp.custom_route("/discord/react", methods=["POST"])
 async def http_discord_react(request: Request) -> JSONResponse:
-    """HTTP endpoint for Lares to add reactions to Discord messages.
+    """HTTP endpoint for Jax to add reactions to Discord messages.
     
     Body: {"message_id": "12345", "emoji": "👀"}
     """
@@ -1231,7 +1243,7 @@ async def run_with_discord():
 
 
 if __name__ == "__main__":
-    print("Starting Lares MCP Server on http://0.0.0.0:8765")
+    print("Starting Jax MCP Server on http://0.0.0.0:8765")
     print("Tools: read_file, list_directory, write_file, run_shell_command")
     print("       read_rss_feed, read_bluesky_user, search_bluesky, post_to_bluesky")
     print("       search_obsidian_notes, read_obsidian_note, write_obsidian_note")
