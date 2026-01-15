@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Runner script for Lares - Phase 1 MCP Architecture.
+"""Runner script for Jax Assistant - Phase 1 MCP Architecture.
 
 This uses the main_mcp.py entry point which connects to the MCP server
 for Discord I/O and executes tools client-side.

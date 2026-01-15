@@ -1,10 +1,10 @@
-# Lares Skills
+# Jax Assistant Skills
 
-Skills are procedural memory - markdown files that teach Lares how to perform specific tasks.
+Skills are procedural memory - markdown files that teach Jax Assistant how to perform specific tasks.
 
 ## Philosophy
 
-Inspired by [Letta Code's skill learning](https://www.letta.com/blog/skill-learning), skills allow Lares to:
+Inspired by [Letta Code's skill learning](https://www.letta.com/blog/skill-learning), skills allow Jax Assistant to:
 - Persist procedural knowledge across context resets
 - Load relevant procedures only when needed (context-efficient)
 - Learn from successful task completions
