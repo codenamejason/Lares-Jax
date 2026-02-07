@@ -82,9 +82,15 @@ def _normalize_model_for_creation(model: str) -> str:
         openai-proxy/openai/gpt-oss-20b -> openai/gpt-oss-20b
         openai/gpt-4 -> openai/gpt-4
     """
-    if model.startswith("openai-proxy/"):
+    strip_proxy = os.getenv("LARES_STRIP_OPENAI_PROXY", "false").lower() == "true"
+    if model.startswith("openai-proxy/") and strip_proxy:
         normalized = model.replace("openai-proxy/", "", 1)
-        log.info("normalized_model_for_creation", original=model, normalized=normalized)
+        log.info(
+            "normalized_model_for_creation",
+            original=model,
+            normalized=normalized,
+            strip_proxy=strip_proxy,
+        )
         return normalized
     return model
 

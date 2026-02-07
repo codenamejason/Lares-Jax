@@ -25,8 +25,6 @@ import asyncio
 import json
 import os
 import subprocess
-import urllib.error
-import urllib.request
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -45,7 +43,7 @@ from lares.time_utils import get_time_context
 # Initialize MCP server
 mcp = FastMCP(
     name="lares-tools",
-    instructions="Jax household AI tools - shell, files, RSS, BlueSky, Obsidian",
+    instructions="Jax household AI tools - shell, files, RSS, Obsidian",
     host="0.0.0.0",
     port=8765,
 )
@@ -59,10 +57,6 @@ ALLOWED_DIRECTORIES = [LARES_PROJECT, OBSIDIAN_VAULT]
 APPROVAL_DB = Path(
     os.getenv("LARES_APPROVAL_DB", "/Users/jaxcoder/strix-jax/Lares-Jax/data/approvals.db")
 )
-
-BSKY_PUBLIC_API = "https://public.api.bsky.app/xrpc"
-BSKY_AUTH_API = "https://bsky.social/xrpc"
-_bsky_session_cache: dict = {}
 
 # Initialize approval queue
 approval_queue = get_queue(APPROVAL_DB)
@@ -213,34 +207,6 @@ def is_path_allowed(path: str) -> bool:
         return False
 
 
-def _get_bsky_auth_token() -> str | None:
-    """Get or refresh BlueSky auth token."""
-    if "access_jwt" in _bsky_session_cache:
-        return _bsky_session_cache["access_jwt"]
-
-    handle = os.getenv("BLUESKY_HANDLE")
-    password = os.getenv("BLUESKY_APP_PASSWORD")
-
-    if not handle or not password:
-        return None
-
-    try:
-        auth_url = f"{BSKY_AUTH_API}/com.atproto.server.createSession"
-        data = json.dumps({"identifier": handle, "password": password}).encode()
-        req = urllib.request.Request(
-            auth_url,
-            data=data,
-            headers={"Content-Type": "application/json"},
-            method="POST",
-        )
-        with urllib.request.urlopen(req, timeout=10) as resp:
-            result = json.loads(resp.read().decode())
-            _bsky_session_cache["access_jwt"] = result.get("accessJwt")
-            _bsky_session_cache["did"] = result.get("did")
-            return _bsky_session_cache["access_jwt"]
-    except Exception:
-        return None
-
 
 # === APPROVAL HTTP ENDPOINTS ===
 
@@ -321,8 +287,6 @@ async def approve_request(request: Request) -> JSONResponse:
     try:
         if tool_name == "run_shell_command":
             result_str = _execute_shell_command(args["command"], args.get("working_dir", str(LARES_PROJECT)))
-        elif tool_name == "post_to_bluesky":
-            result_str = _execute_bluesky_post(args["text"])
         else:
             # Fallback for other tools (shouldn't happen often)
             result = await mcp.call_tool(tool_name, args)
@@ -802,140 +766,6 @@ def read_rss_feed(url: str, max_entries: int = 5) -> str:
         return f"Error reading feed: {e}"
 
 
-# === BLUESKY TOOLS ===
-
-
-@mcp.tool()
-def read_bluesky_user(handle: str, limit: int = 5) -> str:
-    """Read recent posts from a BlueSky user."""
-    if not handle.endswith(".bsky.social") and "." not in handle:
-        handle = f"{handle}.bsky.social"
-
-    try:
-        url = f"{BSKY_PUBLIC_API}/app.bsky.feed.getAuthorFeed?actor={handle}&limit={limit}"
-        req = urllib.request.Request(url, headers={"Accept": "application/json"})
-        with urllib.request.urlopen(req, timeout=10) as resp:
-            data = json.loads(resp.read().decode())
-
-        posts = data.get("feed", [])
-        if not posts:
-            return f"No posts found for @{handle}"
-
-        lines = [f"🦋 Recent posts from @{handle}", ""]
-        for item in posts:
-            post = item.get("post", {})
-            record = post.get("record", {})
-            text = record.get("text", "")[:200]
-            created = record.get("createdAt", "")[:10]
-            lines.append(f"• [{created}] {text}")
-            lines.append("")
-        return "\n".join(lines)
-    except urllib.error.HTTPError as e:
-        return f"Error: HTTP {e.code} - {e.reason}"
-    except Exception as e:
-        return f"Error reading BlueSky: {e}"
-
-
-@mcp.tool()
-def search_bluesky(query: str, limit: int = 10) -> str:
-    """Search BlueSky posts for a given query. Requires authentication."""
-    auth_token = _get_bsky_auth_token()
-    if not auth_token:
-        return "Error: Search requires auth. Set BLUESKY_HANDLE and BLUESKY_APP_PASSWORD"
-
-    try:
-        import urllib.parse
-
-        encoded = urllib.parse.quote(query)
-        url = f"{BSKY_AUTH_API}/app.bsky.feed.searchPosts?q={encoded}&limit={limit}"
-        headers = {"Authorization": f"Bearer {auth_token}", "Accept": "application/json"}
-        req = urllib.request.Request(url, headers=headers)
-        with urllib.request.urlopen(req, timeout=10) as resp:
-            data = json.loads(resp.read().decode())
-
-        posts = data.get("posts", [])
-        if not posts:
-            return f"No results for: {query}"
-
-        lines = [f"🔍 Search results for: {query}", ""]
-        for post in posts:
-            author = post.get("author", {}).get("handle", "unknown")
-            text = post.get("record", {}).get("text", "")[:150]
-            lines.append(f"@{author}: {text}")
-            lines.append("")
-        return "\n".join(lines)
-    except urllib.error.HTTPError as e:
-        _bsky_session_cache.clear()
-        return f"Error: HTTP {e.code} - {e.reason}"
-    except Exception as e:
-        return f"Error searching BlueSky: {e}"
-
-
-def _execute_bluesky_post(text: str, retry: bool = True) -> str:
-    """Internal: Execute BlueSky post without approval check."""
-    auth_token = _get_bsky_auth_token()
-    if not auth_token:
-        return "Error: Auth required. Set BLUESKY_HANDLE and BLUESKY_APP_PASSWORD"
-
-    did = _bsky_session_cache.get("did")
-    if not did:
-        return "Error: No DID in session. Re-authentication required."
-
-    try:
-        create_url = f"{BSKY_AUTH_API}/com.atproto.repo.createRecord"
-        headers = {
-            "Authorization": f"Bearer {auth_token}",
-            "Content-Type": "application/json",
-        }
-        record = {
-            "$type": "app.bsky.feed.post",
-            "text": text,
-            "createdAt": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
-        }
-        payload = json.dumps(
-            {
-                "repo": did,
-                "collection": "app.bsky.feed.post",
-                "record": record,
-            }
-        ).encode()
-
-        req = urllib.request.Request(create_url, data=payload, headers=headers, method="POST")
-        with urllib.request.urlopen(req, timeout=10) as resp:
-            result = json.loads(resp.read().decode())
-        return f"✅ Posted to BlueSky!\nURI: {result.get('uri')}"
-    except urllib.error.HTTPError as e:
-        _bsky_session_cache.clear()
-        # Retry once with fresh token on 400/401 (likely expired token)
-        if retry and e.code in (400, 401):
-            return _execute_bluesky_post(text, retry=False)
-        return f"Error: HTTP {e.code} - {e.reason}"
-    except Exception as e:
-        return f"Error posting to BlueSky: {e}"
-
-
-@mcp.tool()
-async def post_to_bluesky(text: str) -> str:
-    """Post a message to BlueSky. Requires approval."""
-    if len(text) > 300:
-        return f"Error: Post too long ({len(text)} chars). Maximum is 300."
-    if not text.strip():
-        return "Error: Post text cannot be empty."
-
-    # BlueSky posts always require approval
-    approval_id = approval_queue.submit("post_to_bluesky", {"text": text})
-    # Emit SSE event for approval notification
-    await push_event("approval_needed", {
-        "id": approval_id,
-        "tool": "post_to_bluesky",
-        "text": text,
-    })
-    return (
-        f"🦋 BlueSky post queued for approval. ID: {approval_id}\n"
-        f"Approval request sent via SSE."
-    )
-
-
 # === OBSIDIAN TOOLS ===
 
 
@@ -1245,7 +1075,7 @@ async def run_with_discord():
 if __name__ == "__main__":
     print("Starting Jax MCP Server on http://0.0.0.0:8765")
     print("Tools: read_file, list_directory, write_file, run_shell_command")
-    print("       read_rss_feed, read_bluesky_user, search_bluesky, post_to_bluesky")
+    print("       read_rss_feed")
     print("       search_obsidian_notes, read_obsidian_note, write_obsidian_note")
     print("       list_calendar_events, create_calendar_event, search_calendar_events")
     print("       discord_send_message, discord_react")

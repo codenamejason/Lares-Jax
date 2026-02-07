@@ -22,7 +22,7 @@ We discovered that ALL 15 tools were generating approval messages in Letta's con
 - Lares would get "stunned" after compaction alerts
 
 ### After the Fix
-- Only 3 tools require approval: `run_command`, `post_to_bluesky`, `create_tool`
+- Only 2 tools require approval: `run_command`, `create_tool`
 - **90% reduction** in approval message overhead
 - **36% fewer total messages** in context
 - Expected 3-5x longer between compactions
@@ -47,7 +47,7 @@ We discovered that ALL 15 tools were generating approval messages in Letta's con
 
 3. **Verify tool behavior**:
    - Common tools (read_file, discord_send_message) should work instantly
-   - Sensitive tools (run_command, post_to_bluesky) still require Discord approval
+   - Sensitive tools (run_command, create_tool) still require Discord approval
 
 ## Testing Scripts
 

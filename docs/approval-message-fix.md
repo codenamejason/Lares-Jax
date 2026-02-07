@@ -23,8 +23,6 @@ TOOLS_NOT_REQUIRING_USER_APPROVAL = {
     "remove_job",
     "list_jobs",
     "read_rss_feed",
-    "read_bluesky_user",
-    "search_bluesky",
     "search_obsidian_notes",
     "restart_lares",
 }
@@ -41,7 +39,7 @@ needs_approval = name not in TOOLS_NOT_REQUIRING_USER_APPROVAL
 - Frequent memory compactions
 
 ### After
-- **3 tools** requiring approval (run_command, post_to_bluesky, create_tool)
+- **2 tools** requiring approval (run_command, create_tool)
 - **4 approval messages** for 20 tool calls (assuming 2 sensitive tool uses)
 - **90% reduction** in approval message overhead
 - **36% fewer total messages** in context
@@ -49,7 +47,6 @@ needs_approval = name not in TOOLS_NOT_REQUIRING_USER_APPROVAL
 ## Security Maintained
 The three tools that genuinely need user approval still require it:
 - `run_command` - Can execute arbitrary shell commands
-- `post_to_bluesky` - Posts publicly to social media
 - `create_tool` - Can create new executable code
 
 ## Testing

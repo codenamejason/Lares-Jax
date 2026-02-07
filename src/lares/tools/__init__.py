@@ -6,7 +6,6 @@ Tools are organized by domain:
 - discord: send_message, react, fetch_discord_history
 - scheduler: schedule_job, remove_job, list_jobs
 - rss: read_rss_feed
-- bluesky: read_bluesky_user
 """
 
 from lares.tools.base import (
@@ -17,7 +16,6 @@ from lares.tools.base import (
     ToolError,
     ToolResult,
 )
-from lares.tools.bluesky import post_to_bluesky, read_bluesky_user, search_bluesky
 from lares.tools.discord import (
     clear_discord_context,
     fetch_discord_history,
@@ -65,9 +63,6 @@ __all__ = [
     "list_jobs",
     "read_rss_feed",
     "read_rss_feeds",
-    "read_bluesky_user",
-    "post_to_bluesky",
-    "search_bluesky",
     "restart_lares",
     "restart_mcp",
     "validate_tool_code",

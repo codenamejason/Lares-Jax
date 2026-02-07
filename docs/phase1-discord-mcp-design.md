@@ -19,7 +19,7 @@
                             ▼
 ┌─────────────────────────────────────────────────────────────┐
 │  MCP Server (mcp_server.py)                                 │
-│  ├── Tools: shell, files, RSS, BlueSky, Obsidian            │
+│  ├── Tools: shell, files, RSS, Obsidian                     │
 │  └── Approval queue (SQLite)                                │
 └─────────────────────────────────────────────────────────────┘
 ```
@@ -40,7 +40,7 @@
 │  ├── Tools:                                                 │
 │  │   ├── discord_send_message(channel_id?, content)         │
 │  │   ├── discord_react(message_id, emoji)                   │
-│  │   ├── shell, files, RSS, BlueSky, Obsidian...            │
+│  │   ├── shell, files, RSS, Obsidian...                     │
 │  └── Approval queue (SQLite + Discord reactions)            │
 └──────────────────────────┬──────────────────────────────────┘
                            │ SSE (events)

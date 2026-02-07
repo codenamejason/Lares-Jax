@@ -6,7 +6,7 @@ services:
     volumes:
       - letta-data:/var/lib/postgresql/data
     environment:
-      - OPENAI_API_BASE=http://192.168.1.77:7777/v1
+      - OPENAI_API_BASE=http://192.168.1.77:7777
       - OPENAI_API_KEY=lm-studio
       - ALLOWED_ORIGINS=http://localhost:1420
       - ALLOWED_HOSTS=*
@@ -30,11 +30,8 @@ services:
       - LARES_PROJECT_PATH=${LARES_PROJECT_PATH:-/app}
       - OBSIDIAN_VAULT_PATH=${OBSIDIAN_VAULT_PATH}
       - LARES_APPROVAL_DB=${LARES_APPROVAL_DB:-/app/data/approvals.db}
-      - LMSTUDIO_BASE_URL=${LMSTUDIO_BASE_URL:-http://192.168.1.77:7777/v1}
+      - LMSTUDIO_BASE_URL=${LMSTUDIO_BASE_URL:-http://192.168.1.77:7777}
       - LARES_MODEL=${LARES_MODEL}
-      - BLUESKY_HANDLE=jaxcoder.bsky.social
-      - BLUESKY_APP_PASSWORD=${BLUESKY_APP_PASSWORD}
-      - BLUESKY_SESSION_TOKEN=${BLUESKY_SESSION_TOKEN}
       - GOOGLE_CALENDAR_CLIENT_ID=${GOOGLE_CALENDAR_CLIENT_ID}
       - GOOGLE_CALENDAR_CLIENT_SECRET=${GOOGLE_CALENDAR_CLIENT_SECRET}
       - GOOGLE_CALENDAR_TOKEN_JSON=${GOOGLE_CALENDAR_TOKEN_JSON}
@@ -47,7 +44,7 @@ services:
       - lares-network
     volumes:
       - ./data:/app/data
-      - "/Users/jaxcoder/Desktop/Obsidian Jax Labs/Jax Labs:/obsidian"
+      - "/home/jaxcoder/Vaults:/obsidian"
 
   lares-bot:
     build:
@@ -66,9 +63,6 @@ services:
       - LARES_MODEL=${LARES_MODEL}
       - OBSIDIAN_VAULT_PATH=${OBSIDIAN_VAULT_PATH}
       - LMSTUDIO_BASE_URL=${LMSTUDIO_BASE_URL:-http://192.168.1.77:7777/v1}
-      - BLUESKY_HANDLE=jaxcoder.bsky.social
-      - BLUESKY_APP_PASSWORD=${BLUESKY_APP_PASSWORD}
-      - BLUESKY_SESSION_TOKEN=${BLUESKY_SESSION_TOKEN}
       - GOOGLE_CALENDAR_CLIENT_ID=${GOOGLE_CALENDAR_CLIENT_ID}
       - GOOGLE_CALENDAR_CLIENT_SECRET=${GOOGLE_CALENDAR_CLIENT_SECRET}
       - GOOGLE_CALENDAR_TOKEN_JSON=${GOOGLE_CALENDAR_TOKEN_JSON}
@@ -81,7 +75,7 @@ services:
     networks:
       - lares-network
     volumes:
-      - "/Users/jaxcoder/Desktop/Obsidian Jax Labs/Jax Labs:/obsidian"
+      - "/home/jaxcoder/Vaults:/obsidian"
 
 volumes:
   letta-data:

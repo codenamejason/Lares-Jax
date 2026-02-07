@@ -1,6 +1,8 @@
 """Registry for Letta tools with client-side execution."""
 
 import asyncio
+import os
+import re
 import traceback
 from typing import Any
 
@@ -25,7 +27,6 @@ from lares.tools import (
     add_to_allowlist,
     list_jobs,
     react,
-    read_bluesky_user,
     read_file,
     read_rss_feed,
     remove_job,
@@ -33,7 +34,6 @@ from lares.tools import (
     restart_mcp,
     run_command,
     schedule_job,
-    search_bluesky,
     send_message,
     validate_tool_code,
     write_file,
@@ -45,119 +45,6 @@ from lares.tools.google_calendar import (
 )
 
 log = structlog.get_logger()
-
-# Pending command approvals: message_id -> (command, future)
-_pending_command_approvals: dict[int, tuple[str, asyncio.Future[bool]]] = {}
-# Pending BlueSky posts: message_id -> (text, channel)
-_pending_bluesky_posts: dict[int, tuple[str, discord.TextChannel]] = {}
-
-
-async def request_command_approval(
-    channel: discord.TextChannel,
-    command: str,
-) -> tuple[discord.Message, asyncio.Future[bool]]:
-    """Request approval for a shell command not in the allowlist."""
-    embed = discord.Embed(
-        title="🔐 Command Approval Requested",
-        description=f"```\n{command}\n```",
-        color=discord.Color.orange(),
-    )
-    embed.add_field(
-        name="This command is not in the allowlist",
-        value="✅ Approve (adds to allowlist)  |  ❌ Deny",
-        inline=False,
-    )
-
-    message = await channel.send(embed=embed)
-    await message.add_reaction("✅")
-    await message.add_reaction("❌")
-
-    future: asyncio.Future[bool] = asyncio.get_event_loop().create_future()
-    _pending_command_approvals[message.id] = (command, future)
-
-    log.info("command_approval_requested", message_id=message.id, command=command)
-    return message, future
-
-
-async def request_bluesky_approval(
-    channel: discord.TextChannel,
-    text: str,
-) -> discord.Message:
-    """Request approval for a BlueSky post."""
-    embed = discord.Embed(
-        title="🦋 BlueSky Post Approval Requested",
-        description=f"```\n{text}\n```",
-        color=discord.Color.blue(),
-    )
-    embed.add_field(
-        name="Approve this post?",
-        value="✅ Approve and post  |  ❌ Deny and discard",
-        inline=False,
-    )
-    embed.set_footer(text=f"Character count: {len(text)}/300")
-
-    message = await channel.send(embed=embed)
-    await message.add_reaction("✅")
-    await message.add_reaction("❌")
-
-    # Store the pending post (no future needed for async)
-    _pending_bluesky_posts[message.id] = (text, channel)
-
-    return message
-
-
-async def handle_approval_reaction(
-    message_id: int,
-    emoji: str,
-    user: discord.User,
-) -> tuple[bool, str] | None:
-    """
-    Handle a reaction on an approval request.
-
-    Returns (approved, command/text) if this was a pending approval, None otherwise.
-    """
-    # Check for command approvals
-    if message_id in _pending_command_approvals:
-        command, future = _pending_command_approvals.pop(message_id)
-
-        if str(emoji) == "✅":
-            log.info("command_approved", message_id=message_id, user=str(user), command=command)
-            future.set_result(True)
-            return (True, command)
-        elif str(emoji) == "❌":
-            log.info("command_denied", message_id=message_id, user=str(user), command=command)
-            future.set_result(False)
-            return (False, command)
-
-        # Put it back if it was a different emoji
-        _pending_command_approvals[message_id] = (command, future)
-        return None
-
-    # Check for BlueSky post approvals
-    if message_id in _pending_bluesky_posts:
-        text, channel = _pending_bluesky_posts.pop(message_id)
-
-        if str(emoji) == "✅":
-            log.info("bluesky_post_approved", message_id=message_id, user=str(user))
-            # Actually post to BlueSky
-            from lares.tools.bluesky import post_to_bluesky
-            result = post_to_bluesky(text)
-
-            # Send confirmation to channel
-            await channel.send(f"✅ BlueSky post approved by {user.mention}!\n{result}")
-            return (True, text)
-
-        elif str(emoji) == "❌":
-            log.info("bluesky_post_denied", message_id=message_id, user=str(user))
-            await channel.send(f"❌ BlueSky post denied by {user.mention}")
-            return (False, text)
-
-        # Put it back if it was a different emoji
-        _pending_bluesky_posts[message_id] = (text, channel)
-        return None
-
-    return None
-
 
 class ToolExecutor:
     """Executes tools with approval workflow support."""
@@ -240,20 +127,6 @@ class ToolExecutor:
                     arguments.get("url", ""),
                     arguments.get("max_entries", 5),
                 )
-            elif tool_name == "read_bluesky_user":
-                result = self._read_bluesky_user(
-                    arguments.get("handle", ""),
-                    arguments.get("limit", 5),
-                )
-            elif tool_name == "search_bluesky":
-                result = self._search_bluesky(
-                    arguments.get("query", ""),
-                    arguments.get("limit", 10),
-                )
-            elif tool_name == "post_to_bluesky":
-                result = await self._post_to_bluesky(
-                    arguments.get("text", ""),
-                )
             elif tool_name == "discord_send_message":
                 result = await self._discord_send_message(
                     arguments.get("content", ""),
@@ -313,6 +186,8 @@ class ToolExecutor:
                     arguments.get("query", ""),
                     arguments.get("max_results", 10),
                 )
+            elif tool_name in {"note", "note_tool"}:
+                result = self._note_tool(arguments)
             else:
                 result = f"Unknown tool: {tool_name}"
             
@@ -364,6 +239,419 @@ class ToolExecutor:
                 traceback=error_traceback
             )
             return f"Error executing {tool_call.name}: {error_msg}"
+
+    def _note_tool(self, arguments: dict[str, Any]) -> str:
+        """Manage Letta notes stored as memory blocks."""
+        if not self.letta_client or not self.agent_id:
+            return "Error: Letta client not configured for note tool"
+
+        command = arguments.get("command")
+        path = arguments.get("path")
+        content = arguments.get("content")
+        old_str = arguments.get("old_str")
+        new_str = arguments.get("new_str")
+        new_path = arguments.get("new_path")
+        insert_line = arguments.get("insert_line")
+        query = arguments.get("query")
+        search_type = arguments.get("search_type", "label")
+
+        if not command:
+            return "Error: 'command' is required"
+
+        all_commands = [
+            "create",
+            "view",
+            "attach",
+            "detach",
+            "insert",
+            "append",
+            "replace",
+            "rename",
+            "copy",
+            "delete",
+            "list",
+            "search",
+            "attached",
+        ]
+        enabled_env = os.environ.get("ENABLED_COMMANDS", "all")
+        if enabled_env in ("all", "*"):
+            enabled = all_commands
+        else:
+            enabled = [item.strip() for item in enabled_env.split(",") if item.strip()]
+        if command not in enabled:
+            return f"Error: '{command}' is disabled. Enabled: {enabled}"
+
+        path_required = {
+            "create",
+            "view",
+            "attach",
+            "detach",
+            "insert",
+            "append",
+            "replace",
+            "rename",
+            "copy",
+            "delete",
+        }
+        if command in path_required and not path:
+            return f"Error: '{command}' requires path parameter"
+
+        if command == "replace" and (not old_str or new_str is None):
+            return "Error: 'replace' requires old_str and new_str parameters"
+
+        if command in {"create", "insert", "append"} and not content:
+            return f"Error: '{command}' requires content parameter"
+
+        if command in {"rename", "copy"} and not new_path:
+            return f"Error: '{command}' requires new_path parameter"
+
+        if command == "search" and not query:
+            return "Error: 'search' requires query parameter"
+
+        uuid_pattern = re.compile(r"/\[?agent-[a-f0-9-]+\]?/")
+        client = self.letta_client
+        agent_id = self.agent_id
+
+        update_directory = False
+        result = None
+
+        try:
+            if command == "create":
+                existing = list(
+                    client.blocks.list(label=path, description_search=agent_id).items
+                )
+                if existing:
+                    return f"Error: Note already exists: {path}"
+
+                client.blocks.create(
+                    label=path,
+                    value=content,
+                    description=f"owner:{agent_id}",
+                )
+                update_directory = True
+                result = f"Created: {path}"
+
+            elif command == "view":
+                blocks = list(
+                    client.blocks.list(label=path, description_search=agent_id).items
+                )
+                if not blocks:
+                    return f"Note not found: {path}"
+                return blocks[0].value
+
+            elif command == "attach":
+                agent = client.agents.retrieve(agent_id=agent_id)
+                attached_ids = {b.id for b in agent.memory.blocks}
+
+                if path.endswith("/*"):
+                    prefix = path[:-1]
+                    all_blocks = list(client.blocks.list(description_search=agent_id).items)
+                    blocks = [
+                        b
+                        for b in all_blocks
+                        if b.label
+                        and b.label.startswith(prefix)
+                        and not uuid_pattern.search(b.label)
+                    ]
+                    if not blocks:
+                        return f"No notes matching: {path}"
+
+                    to_attach = [b for b in blocks if b.id not in attached_ids]
+                    skipped = len(blocks) - len(to_attach)
+                    for block in to_attach:
+                        client.agents.blocks.attach(agent_id=agent_id, block_id=block.id)
+
+                    msg = f"Attached {len(to_attach)} notes matching {path}"
+                    if skipped:
+                        msg += f" ({skipped} already attached)"
+                    return msg
+
+                existing = list(
+                    client.blocks.list(label=path, description_search=agent_id).items
+                )
+                if existing:
+                    block_id = existing[0].id
+                    if block_id in attached_ids:
+                        return f"Already attached: {path}"
+                else:
+                    new_block = client.blocks.create(
+                        label=path,
+                        value=content or "",
+                        description=f"owner:{agent_id}",
+                    )
+                    block_id = new_block.id
+                    update_directory = True
+
+                client.agents.blocks.attach(agent_id=agent_id, block_id=block_id)
+                result = f"Attached: {path}"
+
+            elif command == "detach":
+                if path.endswith("/*"):
+                    prefix = path[:-1]
+                    agent = client.agents.retrieve(agent_id=agent_id)
+                    attached_ids = {b.id for b in agent.memory.blocks}
+                    all_blocks = list(client.blocks.list(description_search=agent_id).items)
+                    blocks = [
+                        b
+                        for b in all_blocks
+                        if b.label
+                        and b.label.startswith(prefix)
+                        and not uuid_pattern.search(b.label)
+                        and b.id in attached_ids
+                    ]
+                    if not blocks:
+                        return f"No attached notes matching: {path}"
+                    for block in blocks:
+                        client.agents.blocks.detach(agent_id=agent_id, block_id=block.id)
+                    return f"Detached {len(blocks)} notes matching {path}"
+
+                blocks = list(
+                    client.blocks.list(label=path, description_search=agent_id).items
+                )
+                if not blocks:
+                    return f"Note not found: {path}"
+
+                client.agents.blocks.detach(agent_id=agent_id, block_id=blocks[0].id)
+                return f"Detached: {path}"
+
+            elif command == "insert":
+                blocks = list(
+                    client.blocks.list(label=path, description_search=agent_id).items
+                )
+                if not blocks:
+                    return f"Note not found: {path}. Use 'attach' first."
+
+                block = blocks[0]
+                lines = block.value.split("\n") if block.value else []
+                line_info = "end"
+                if insert_line is not None:
+                    try:
+                        line_idx = int(insert_line)
+                    except (TypeError, ValueError):
+                        line_idx = None
+                    if line_idx is not None:
+                        lines.insert(line_idx, content)
+                        line_info = f"line {line_idx}"
+                    else:
+                        lines.append(content)
+                else:
+                    lines.append(content)
+
+                client.blocks.update(block_id=block.id, value="\n".join(lines))
+                preview = content[:80] + ("..." if len(content) > 80 else "")
+                return f"Inserted at {line_info} in {path}:\n  + {preview}"
+
+            elif command == "append":
+                blocks = list(
+                    client.blocks.list(label=path, description_search=agent_id).items
+                )
+                if not blocks:
+                    return f"Note not found: {path}. Use 'attach' first."
+
+                block = blocks[0]
+                if block.value:
+                    new_value = block.value + "\n" + content
+                else:
+                    new_value = content
+
+                client.blocks.update(block_id=block.id, value=new_value)
+                preview = content[:80] + ("..." if len(content) > 80 else "")
+                return f"Appended to {path}:\n  + {preview}"
+
+            elif command == "replace":
+                blocks = list(
+                    client.blocks.list(label=path, description_search=agent_id).items
+                )
+                if not blocks:
+                    return f"Note not found: {path}"
+
+                block = blocks[0]
+                if old_str not in (block.value or ""):
+                    return "Error: old_str not found in note. Exact match required."
+
+                new_value = (block.value or "").replace(old_str, new_str, 1)
+                client.blocks.update(block_id=block.id, value=new_value)
+                return f"Replaced in {path}:\n  - {old_str}\n  + {new_str}"
+
+            elif command == "rename":
+                blocks = list(
+                    client.blocks.list(label=path, description_search=agent_id).items
+                )
+                if not blocks:
+                    return f"Note not found: {path}"
+
+                dest_blocks = list(
+                    client.blocks.list(label=new_path, description_search=agent_id).items
+                )
+                if dest_blocks:
+                    return f"Error: Destination already exists: {new_path}"
+
+                block = blocks[0]
+                client.blocks.update(block_id=block.id, label=new_path)
+                update_directory = True
+                result = f"Renamed: {path} -> {new_path}"
+
+            elif command == "copy":
+                blocks = list(
+                    client.blocks.list(label=path, description_search=agent_id).items
+                )
+                if not blocks:
+                    return f"Note not found: {path}"
+
+                dest_blocks = list(
+                    client.blocks.list(label=new_path, description_search=agent_id).items
+                )
+                if dest_blocks:
+                    return f"Error: Destination already exists: {new_path}"
+
+                source = blocks[0]
+                client.blocks.create(
+                    label=new_path,
+                    value=source.value,
+                    description=f"owner:{agent_id}",
+                )
+                update_directory = True
+                result = f"Copied: {path} -> {new_path}"
+
+            elif command == "delete":
+                blocks = list(
+                    client.blocks.list(label=path, description_search=agent_id).items
+                )
+                if not blocks:
+                    return f"Note not found: {path}"
+
+                client.blocks.delete(block_id=blocks[0].id)
+                update_directory = True
+                result = f"Deleted: {path}"
+
+            elif command == "list":
+                all_blocks = list(client.blocks.list(description_search=agent_id).items)
+                blocks = [
+                    b
+                    for b in all_blocks
+                    if b.label
+                    and b.label.startswith("/")
+                    and not uuid_pattern.search(b.label)
+                ]
+                if query and query != "*":
+                    blocks = [b for b in blocks if b.label.startswith(query)]
+
+                if not blocks:
+                    return "No notes found" if not query or query == "*" else f"No notes matching: {query}"
+
+                labels = sorted({b.label for b in blocks})
+                return "\n".join(labels)
+
+            elif command == "search":
+                all_blocks = list(client.blocks.list(description_search=agent_id).items)
+                all_blocks = [
+                    b
+                    for b in all_blocks
+                    if b.label
+                    and b.label.startswith("/")
+                    and not uuid_pattern.search(b.label)
+                ]
+
+                if search_type == "label":
+                    blocks = [b for b in all_blocks if query in b.label]
+                else:
+                    blocks = [b for b in all_blocks if b.value and query in b.value]
+
+                if not blocks:
+                    return f"No notes matching: {query}"
+
+                results = []
+                for b in blocks:
+                    preview = b.value[:100].replace("\n", " ") if b.value else ""
+                    if len(b.value or "") > 100:
+                        preview += "..."
+                    results.append(f"{b.label}: {preview}")
+
+                return "\n".join(results)
+
+            elif command == "attached":
+                agent = client.agents.retrieve(agent_id=agent_id)
+                note_blocks = [
+                    b
+                    for b in agent.memory.blocks
+                    if b.label
+                    and b.label.startswith("/")
+                    and not uuid_pattern.search(b.label)
+                ]
+                if not note_blocks:
+                    return "No notes currently attached"
+                return "\n".join(sorted(b.label for b in note_blocks))
+
+            else:
+                return f"Error: Unknown command '{command}'"
+
+            if update_directory:
+                self._update_note_directory(client, agent_id, uuid_pattern)
+
+            if result:
+                return result
+
+        except Exception as e:
+            return f"Error executing '{command}': {e}"
+
+        return ""
+
+    def _update_note_directory(self, client: Letta, agent_id: str, uuid_pattern: re.Pattern) -> None:
+        dir_label = "/note_directory"
+        all_blocks = list(client.blocks.list(description_search=agent_id).items)
+        notes = [
+            b
+            for b in all_blocks
+            if b.label
+            and b.label.startswith("/")
+            and b.label != dir_label
+            and not uuid_pattern.search(b.label)
+        ]
+
+        header = (
+            "External storage. Attach to load into context, detach when done.\n"
+            "Folders are also notes (e.g., /projects and /projects/task1 can both have content).\n"
+            "Commands: view, attach, detach, insert, append, replace, rename, copy, delete, list, search\n"
+            "Bulk: attach /folder/*, detach /folder/*"
+        )
+
+        if notes:
+            folders: dict[str, list[tuple[str, str]]] = {}
+            for b in sorted(notes, key=lambda x: x.label):
+                parts = b.label.rsplit("/", 1)
+                if len(parts) == 2:
+                    folder, name = parts[0] + "/", parts[1]
+                else:
+                    folder, name = "/", b.label[1:]
+                if folder not in folders:
+                    folders[folder] = []
+                first_line = (b.value or "").split("\n")[0][:80]
+                if len((b.value or "").split("\n")[0]) > 80:
+                    first_line += "..."
+                folders[folder].append((name, first_line))
+
+            lines: list[str] = []
+            for folder in sorted(folders.keys()):
+                lines.append(folder)
+                items = folders[folder]
+                max_name_len = max(len(name) for name, _ in items)
+                for name, summary in items:
+                    lines.append(f"  {name.ljust(max_name_len)} | {summary}")
+
+            dir_content = header + "\n\n" + "\n".join(lines)
+        else:
+            dir_content = header + "\n\n(no notes)"
+
+        dir_blocks = list(client.blocks.list(label=dir_label, description_search=agent_id).items)
+        if dir_blocks:
+            client.blocks.update(block_id=dir_blocks[0].id, value=dir_content)
+        else:
+            dir_block = client.blocks.create(
+                label=dir_label,
+                value=dir_content,
+                description=f"owner:{agent_id}",
+            )
+            client.agents.blocks.attach(agent_id=agent_id, block_id=dir_block.id)
 
     async def _run_command(self, command: str, working_dir: str | None) -> str:
         """Execute a command, requesting approval if needed."""
@@ -507,37 +795,6 @@ class ToolExecutor:
         """Read an RSS feed."""
         return read_rss_feed(url, max_entries=max_entries)
 
-    def _read_bluesky_user(self, handle: str, limit: int) -> str:
-        """Read posts from a Bluesky user."""
-        return read_bluesky_user(handle, limit=limit)
-
-    def _search_bluesky(self, query: str, limit: int) -> str:
-        """Search Bluesky posts."""
-        return search_bluesky(query, limit=limit)
-
-    async def _post_to_bluesky(self, text: str) -> str:
-        """Post to BlueSky with approval workflow."""
-        log.info("requesting_bluesky_approval", text_length=len(text))
-
-        # Use MCP approval queue if available
-        if self.mcp_url:
-            return await self._request_mcp_approval(
-                "post_to_bluesky",
-                {"text": text}
-            )
-
-        # Fall back to old Discord channel approach
-        if self.channel is None:
-            return "Error: No Discord channel available for BlueSky post approval"
-
-        # Request approval via Discord
-        message = await request_bluesky_approval(self.channel, text)
-
-        return (
-            f"📨 BlueSky post queued for approval (message #{message.id})\n"
-            f"The post will be sent once approved by reacting with ✅\n"
-            f"Text: {text[:100]}{'...' if len(text) > 100 else ''}"
-        )
 
     async def _discord_send_message(self, content: str, reply: bool) -> str:
         """Send a message to Discord."""
@@ -691,6 +948,52 @@ class ToolExecutor:
 
 # Tool definitions for Letta registration
 TOOL_SOURCES = {
+    "note": '''
+def note(
+    command: str,
+    path: str = None,
+    content: str = None,
+    old_str: str = None,
+    new_str: str = None,
+    new_path: str = None,
+    insert_line: int = None,
+    query: str = None,
+    search_type: str = "label",
+) -> str:
+    """
+    Manage notes in your vault. All notes are automatically scoped to your agent.
+
+    Commands:
+      create <path> <content>             - create new note (not attached)
+      view <path>                         - read note contents
+      attach <path> [content]             - load into context (supports /folder/*)
+      detach <path>                       - remove from context (supports /folder/*)
+      insert <path> <content> [line]      - insert before line (0-indexed) or append
+      append <path> <content>             - add content to end of note
+      replace <path> <old_str> <new_str>  - find/replace, shows diff
+      rename <path> <new_path>            - move/rename note to new path
+      copy <path> <new_path>              - duplicate note to new path
+      delete <path>                       - permanently remove
+      list [query]                        - list notes (prefix filter, * for all)
+      search <query> [label|content]      - grep notes by label or content
+      attached                            - show notes currently in context
+
+    Args:
+        command: The operation to perform
+        path: Path to the note (e.g., /projects/webapp, /todo)
+        content: Content to insert or initial content when creating
+        old_str: Text to find (for replace)
+        new_str: Text to replace with (for replace)
+        new_path: Destination path (for rename/copy)
+        insert_line: Line number to insert before (0-indexed, omit to append)
+        query: Search query (for list/search)
+        search_type: Search by "label" or "content"
+
+    Returns:
+        Result of the operation
+    """
+    raise Exception("Client-side tool")
+''',
     "run_command": '''
 def run_command(command: str, working_dir: str = None) -> str:
     """
@@ -824,59 +1127,6 @@ def read_rss_feed(url: str, max_entries: int = 5) -> str:
     """
     raise Exception("Client-side tool")
 ''',
-    "read_bluesky_user": '''
-def read_bluesky_user(handle: str, limit: int = 5) -> str:
-    """
-    Read recent posts from a BlueSky user.
-
-    Use this to check what someone is posting about on BlueSky.
-    No authentication required for public posts.
-
-    Args:
-        handle: The user's handle (e.g., "user.bsky.social" or just "username")
-        limit: Maximum number of posts to return (default 5)
-
-    Returns:
-        Formatted string containing the user's recent posts
-    """
-    raise Exception("Client-side tool")
-''',
-    "search_bluesky": '''
-def search_bluesky(query: str, limit: int = 10) -> str:
-    """
-    Search BlueSky posts for a given query.
-
-    Use this to find posts about specific topics on BlueSky.
-    Searches public posts only.
-
-    Args:
-        query: Search query string
-        limit: Maximum number of results (default 10)
-
-    Returns:
-        Formatted string containing matching posts
-    """
-    raise Exception("Client-side tool")
-''',
-    "post_to_bluesky": '''
-def post_to_bluesky(text: str) -> str:
-    """
-    Post a message to BlueSky.
-
-    Use this to share thoughts, interesting finds, or engage on BlueSky.
-    Posts appear on your account (@laresai.bsky.social).
-
-    Be thoughtful about what you post - it represents you publicly.
-
-    Args:
-        text: The text to post (max 300 characters)
-
-    Returns:
-        Status message indicating success or failure
-    """
-    raise Exception("Client-side tool")
-''',
-
     "discord_send_message": '''
 def discord_send_message(content: str, reply: bool = False) -> str:
     """

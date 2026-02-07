@@ -19,7 +19,7 @@ Inspired by [Strix](https://timkellogg.me/blog/2025/12/15/strix), Jax Assistant 
 - **Autonomous Operation**: "Perch time" ticks every hour for self-reflection and proactive actions
 - **Scheduled Tasks**: Set reminders and recurring jobs with flexible scheduling
 - **Self-Management**: Can restart itself for updates and maintenance
-- **Tool System**: File operations, shell commands, RSS feeds, BlueSky integration, and more
+- **Tool System**: File operations, shell commands, RSS feeds, and more
 - **Skills System**: Procedural memory through markdown files - teaches Jax Assistant how to perform tasks
 - **MCP Server**: Portable tool layer via Model Context Protocol - connect any MCP-compatible system
 - **Extensible**: Designed for adding new interfaces (Telegram, web) and capabilities
@@ -61,8 +61,6 @@ cp .env.example .env
 # - ANTHROPIC_API_KEY: For the LLM (required for self-hosted Letta)
 
 # Optional integrations:
-# - BLUESKY_HANDLE: Your BlueSky handle (e.g., user.bsky.social)
-# - BLUESKY_APP_PASSWORD: App password from BlueSky settings
 # - OBSIDIAN_VAULT_PATH: Path to your Obsidian vault folder
 # - LARES_MAX_TOOL_ITERATIONS: Max tool iterations per message (default: 10)
 ```
@@ -192,16 +190,6 @@ When Jax Assistant tries to run a shell command not in the allowlist:
 3. If approved: adds command to allowlist and executes
 4. If denied or timeout: returns error to Jax Assistant
 
-### BlueSky Post Approval (Asynchronous)
-When Jax Assistant wants to post to BlueSky:
-1. Sends approval request to Discord with post preview
-2. **Returns immediately** - Jax Assistant continues other work
-3. You can approve/deny anytime (even hours later)
-4. When approved: post is sent to BlueSky
-5. When denied: post is discarded
-
-This async pattern prevents Jax Assistant from being blocked while waiting for approval.
-
 ## Self-Restart Capability
 
 Jax Assistant can restart itself when needed (e.g., after updates, configuration changes, or for maintenance). This requires passwordless sudo access for the restart command.
@@ -262,7 +250,6 @@ src/lares/
 ├── tool_registry.py   # Tool execution and approval workflow
 ├── response_parser.py # Discord response parsing (reactions, messages)
 ├── time_utils.py      # Time context and timezone handling
-├── bluesky_reader.py  # BlueSky API client
 ├── rss_reader.py      # RSS/Atom feed parser
 ├── obsidian.py        # Obsidian vault integration (optional)
 ├── mcp_server.py     # MCP server exposing tools via SSE
@@ -274,7 +261,6 @@ src/lares/
 │   ├── discord.py         # send_message, react
 │   ├── scheduler.py       # schedule_job, remove_job, list_jobs
 │   ├── rss.py             # read_rss_feed
-│   ├── bluesky.py         # read_bluesky_user, search_bluesky, post_to_bluesky
 │   ├── system_management.py  # restart_lares
 │   └── tool_creation.py   # create_tool (dynamic tool creation)
 └── main.py            # Entry point
@@ -319,9 +305,9 @@ Skills are indexed in Jax Assistant's persona (lightweight pointers) and loaded 
 
 ### Available Tools
 
-Jax Assistant has access to 20 tools (native + MCP), plus optional Obsidian integration:
+Jax Assistant has access to native tools plus optional Obsidian integration:
 
-#### Native Tools (10)
+#### Native Tools
 
 | Tool | Description |
 |------|-------------|
@@ -332,9 +318,6 @@ Jax Assistant has access to 20 tools (native + MCP), plus optional Obsidian inte
 | `remove_job` | Remove scheduled jobs |
 | `list_jobs` | List all scheduled jobs |
 | `read_rss_feed` | Read RSS/Atom feeds |
-| `read_bluesky_user` | Read posts from a BlueSky user |
-| `search_bluesky` | Search BlueSky posts |
-| `post_to_bluesky` | Post to BlueSky (async approval workflow) |
 | `discord_send_message` | Send messages to Discord (reply mode optional) |
 | `discord_react` | React to messages with emoji |
 | `restart_lares` | Restart the Jax Assistant service |
@@ -399,7 +382,7 @@ python -m lares.mcp_server
 # Or as a systemd service (see lares-mcp.service)
 ```
 
-### MCP Tools (10)
+### MCP Tools
 
 The MCP server provides these tools:
 
@@ -410,9 +393,6 @@ The MCP server provides these tools:
 | `write_file` | Write files to allowed directories |
 | `list_directory` | List contents of a directory |
 | `read_rss_feed` | Read RSS/Atom feeds |
-| `read_bluesky_user` | Read posts from a BlueSky user |
-| `search_bluesky` | Search BlueSky posts |
-| `post_to_bluesky` | Post to BlueSky (requires approval) |
 | `search_obsidian_notes` | Search notes in Obsidian vault |
 | `read_obsidian_note` | Read a specific note from Obsidian |
 

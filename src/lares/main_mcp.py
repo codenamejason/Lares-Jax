@@ -90,10 +90,6 @@ class ApprovalManager:
                 cmd = args.get("command", "")
                 text = f"```\n{cmd}\n```"
                 title = "🔧 Shell Command Approval"
-            elif tool == "post_to_bluesky":
-                post_text = args.get("text", "")
-                text = f"```\n{post_text}\n```"
-                title = "🦋 BlueSky Post Approval"
             else:
                 text = f"Tool: {tool}\nArgs: {args}"
                 title = "⚠️ Tool Approval Required"
